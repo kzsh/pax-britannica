@@ -1,7 +1,9 @@
-                                                                     
-                                                                     
-                                                                     
-                                             
+This is a vibe-coded port of Pax Britannica to Lua 5.4 and GLFW 3, made with
+an LLM coding agent. It has not been reviewed line by line by a human.
+
+The original codebase, which this came from, is at:
+    https://github.com/henkboom/pax-britannica
+
 ====================================================
 ==                 PAX BRITANNICA                 ==
 ==    One-button real-time strategy for GAMMA4    ==
@@ -10,10 +12,10 @@
 Setup
 --------
 
-The game can be played with one player versus the 
+The game can be played with one player versus the
 computer, or up to four players head-to-head. Simply
 press 'A' on the title screen to join the game.
-Other players can join as long as the 5-second 
+Other players can join as long as the 5-second
 countdown doesn't run out. The 'a', 'f', 'h' and 'l'
 keys are mapped to players 1-4. Alternately, you can
 play with Xbox controllers.
@@ -43,29 +45,29 @@ to the quadrant that the needle is pointing at.
 4 : UPGRADE  Improve your factory ship to accumulate
              resources more quickly.
 
-                     __.......__                        
-                _.-''    |      '-..                    
-             ,-'         |          '-.                 
-           ,'            |             '.               
-         ,'              |               '\             
-        /                |                 `            
-       /                 |                  `.          
-      /        4         |        1          \          
-     |                   |                    |         
-     |                   |                    |         
-    |                    |                     |        
-    |--------------------|---------------------|        
-    '.                   |                    .'        
-     |                   |                    |         
-      |                  |                   .'         
-       \       3         |        2          /          
-        \                |                 ,'           
-         `               |                /             
-          '.             |              ,'              
-            '-.          |           _,'           
-               '-._      |       _,-'                   
-                   '`--......---'                       
-                                                     
+                     __.......__
+                _.-''    |      '-..
+             ,-'         |          '-.
+           ,'            |             '.
+         ,'              |               '\
+        /                |                 `
+       /                 |                  `.
+      /        4         |        1          \
+     |                   |                    |
+     |                   |                    |
+    |                    |                     |
+    |--------------------|---------------------|
+    '.                   |                    .'
+     |                   |                    |
+      |                  |                   .'
+       \       3         |        2          /
+        \                |                 ,'
+         `               |                /
+          '.             |              ,'
+            '-.          |           _,'
+               '-._      |       _,-'
+                   '`--......---'
+
 Ships you spawn fight automatically using the latest
 in artificial aquatelligence technology.
 
