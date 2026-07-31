@@ -123,8 +123,8 @@ static int particles__make_emitter(lua_State *L)
 {
     float width = (float)luaL_checknumber(L, 1);
     float height = (float)luaL_checknumber(L, 2);
-    int texture = luaL_checkint(L, 3);
-    int life = luaL_checkint(L, 4);
+    int texture = luaL_checkinteger(L, 3);
+    int life = luaL_checkinteger(L, 4);
     float damping = luaL_checknumber(L, 5);
     float delta_scale = luaL_checknumber(L, 6);
 
@@ -149,7 +149,7 @@ static int particles__make_emitter(lua_State *L)
     return 1;
 }
 
-static const luaL_reg emitter_lib[] =
+static const luaL_Reg emitter_lib[] =
 {
     {"draw", emitter__draw},
     {"update", emitter__update},
@@ -168,10 +168,10 @@ int luaopen_particles(lua_State *L)
     luaL_newmetatable(L, "particles.emitter");
     lua_pushvalue(L, -1);
     lua_setfield(L, -2, "__index");
-    luaL_register(L, NULL, emitter_lib);
+    luaL_setfuncs(L, emitter_lib, 0);
 
     lua_newtable(L);
-    luaL_register(L, NULL, particles_lib);
+    luaL_setfuncs(L, particles_lib, 0);
     return 1;
 }
 

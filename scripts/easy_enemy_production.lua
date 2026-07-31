@@ -12,7 +12,7 @@ local script_index = 0
 self.resources.harvest_rate = self.resources.harvest_rate * 0.8
 
 local function next_script()  
-  script_index = math.ceil(math.random() * table.getn(SCRIPTED_ACTIONS))
+  script_index = math.random(#SCRIPTED_ACTIONS)
   --print ('player ' .. self.ship.player .. ' picked script #' .. script_index)  
 end
 
@@ -20,7 +20,7 @@ local function next_action()
   accumulated_frames = 0  
  
   action_index = action_index + 1
-  if action_index > table.getn(SCRIPTED_ACTIONS[script_index]) then 
+  if action_index > #SCRIPTED_ACTIONS[script_index] then 
     action_index = 1 
     next_script()
   end

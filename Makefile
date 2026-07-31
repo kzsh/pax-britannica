@@ -9,14 +9,14 @@ help:
 	@cat compiling.txt
 
 $(PLATFORMS):
-	make -C dokidoki-support $@ \
+	$(MAKE) -C dokidoki-support $@ \
 		NAME="../$(NAME)" \
-		EXTRA_CFLAGS="-DEXTRA_LOADERS=\"../extra_loaders.h\" $(EXTRA_CFLAGS)" \
+		EXTRA_CFLAGS="-DEXTRA_LOADERS -I.. $(EXTRA_CFLAGS)" \
 		EXTRA_OBJECTS="../particles.o"
 
 clean:
 	rm -f particles.o
-	make -C dokidoki-support clean NAME="../$(NAME)"
+	$(MAKE) -C dokidoki-support clean NAME="../$(NAME)"
 
 $(APPNAME).app: macosx Info.plist
 	rm -rf $@

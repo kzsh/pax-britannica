@@ -1,6 +1,3 @@
-dokidoki_disable_debug = true
-require 'dokidoki.module' [[]]
-
 local kernel = require 'dokidoki.kernel'
 
 local the_game = require 'the_game'

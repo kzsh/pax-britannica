@@ -10,7 +10,7 @@ end
 
 function update()
   counter = counter - 1/60
-  self.sprite.color = {1, 1, 1, math.sin(math.mod(counter, 1) * math.pi)}
+  self.sprite.color = {1, 1, 1, math.sin(counter % 1 * math.pi)}
   
   if counter <= 0 then
     self.dead = true 

@@ -11,7 +11,7 @@ function draw()
   gl.glPushMatrix()
   gl.glTranslated(self.transform.pos.x, self.transform.pos.y, 0)
   local f = self.transform.facing
-  gl.glRotated(180/math.pi * math.atan2(f.y, f.x), 0, 0, 1)
+  gl.glRotated(180/math.pi * math.atan(f.y, f.x), 0, 0, 1)
 
   local opacity = (self.sprite.color[4] or 1) * math.random()
   gl.glColor4d(1, 1, 1, opacity)

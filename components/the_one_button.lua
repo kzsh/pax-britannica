@@ -1,4 +1,4 @@
-require 'glfw'
+local glfw = require 'glfw'
 
 local old_states = {}
 local states = {}

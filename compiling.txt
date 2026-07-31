@@ -8,10 +8,13 @@ Linux:   make linux
 OS X:    make macosx
 Windows: make mingw
 
-Pax Britannica depends on lua 5.1 and glfw. On some systems you might need to
-tell the build process where to find these. On Ubuntu, for example, the
-liblua5.1-dev package installs lua as lua5.1, so you need to use
-    make linux EXTRA_CFLAGS=-I/usr/include/lua5.1
-and additionally change -llua in dokidoki-support/Makefile to -llua5.1
+Pax Britannica depends on lua 5.4 and glfw 2.x. The lua flags come from
+pkg-config; if your distribution names the .pc file something other than
+"lua5.4", pass it in:
+    make linux LUA_PKG=lua-5.4
+or bypass pkg-config entirely:
+    make linux LUA_CFLAGS=-I/usr/local/include LUA_LDFLAGS=-llua
 
-None of this is a problem if you installed lua from source ;)
+The game logic can also be run without a window, which is handy for checking
+that a change didn't break anything:
+    lua5.4 test/headless.lua

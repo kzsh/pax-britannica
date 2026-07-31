@@ -1,11 +1,9 @@
-require 'dokidoki.module' [[ make ]]
-
 local game = require 'dokidoki.game'
 local kernel = require 'dokidoki.kernel'
-local v2 = require 'dokidoki.v2'
-require 'glfw'
 
 local blueprints = require 'blueprints'
+
+local the_game = {}
 
 local music
 
@@ -14,14 +12,14 @@ for _, a in ipairs(arg) do
   args[a] = true
 end
 
-function make ()
+function the_game.make()
   return game.make_game(
     {'update_setup', 'update', 'collision_registry', 'collision_check',
      'update_cleanup'},
     {'draw_setup', 'draw', 'draw_foreground', 'fade_draw'},
     function (game)
-      math.randomseed(os.time())
-      glfw.SetWindowTitle("Pax Britannica")
+      math.randomseed()
+      kernel.set_window_title("Pax Britannica")
 
       game.init_component('exit_handler')
       game.init_component('keyboard')
@@ -66,4 +64,4 @@ function make ()
     end)
 end
 
-return get_module_exports()
+return the_game
