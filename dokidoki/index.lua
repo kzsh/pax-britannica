@@ -1,0 +1,14 @@
+--- dokidoki
+--- ========
+--- 
+--- A small game development framework for [lua][1].
+---
+--- [1]: http://www.lua.org/
+---
+--- Documentation
+--- -------------
+---
+--- - [dokidoki.game](game.lua)
+--- - [dokidoki.kernel](kernel.lua)
+--- - [dokidoki.components.exit_handler](components/exit_handler.lua)
+--- - [dokidoki.components.keyboard](components/keyboard.lua)

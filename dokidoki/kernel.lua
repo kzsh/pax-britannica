@@ -1,0 +1,361 @@
+--- dokidoki.kernel
+--- ===============
+---
+--- `dokidoki.kernel` handles initialization and the core loop.  It takes an
+--- abstract scene object which provides implementations of updating, drawing,
+--- and event-handling functions.
+---
+--- A scene must implement:
+---
+--- - `scene.update()`
+--- - `scene.draw()`
+--- - `scene.handle_event(event)`
+---
+--- where none of the callbacks has a return value.
+---
+--- For the `handle_event(event)` callback, `event` has one of the following
+--- forms:
+---
+--- - `{type = 'close'}`
+--- - `{type = 'resize', width = ?, height = ?}`
+--- - `{type = 'key', key = ?, is_down = ?}` (`key` is a GLFW key constant)
+
+--- Implementation
+--- --------------
+
+local gl = require "gl"
+local glfw = require "glfw"
+local log = require "log"
+local mixer = require "mixer"
+
+local kernel = {}
+
+---- Constants ----------------------------------------------------------------
+
+local max_sample_frames = 16
+
+-- Never sleep for less than this amount. This has to be bigger on systems with
+-- really lame timers, like Windows.
+local min_sleep_time = 0.002
+-- Allow for this much inaccuracy in the OS sleep operation
+local sleep_allowance = 0.002
+
+---- State Variables ----------------------------------------------------------
+
+local max_frameskip = 6
+local fps = 60
+
+local running = false
+local use_fullscreen = false
+
+local width = nil
+local height = nil
+local ratio = nil
+local window_title = 'dokidoki'
+local window_open = false
+
+local frame_times = {}
+
+local next_scene = nil
+
+---- Utility Functions --------------------------------------------------------
+
+local function get_stack_trace(err)
+  return debug.traceback(err, 2)
+end
+
+local function get_current_time()
+  return glfw.GetTime()
+end
+
+local function sleep_until(time)
+  local time_to_sleep = time - get_current_time() - sleep_allowance
+  if time_to_sleep > min_sleep_time then
+    glfw.Sleep(time_to_sleep)
+  end
+  -- Floating point inaccuracy can cause this to pass here but not in the main
+  -- loop, making us do iterations of 0 updates, which is stupid because it
+  -- will render the same thing as last time. Making this condition slightly
+  -- stricter fixes it.
+  while time + 0.0001 > get_current_time() do end
+end
+
+local function update_viewport()
+  if width / height > ratio then
+    -- pillarbox
+    local inner_width = math.floor(height * ratio + 0.5)
+    gl.glViewport(math.floor((width - inner_width) / 2), 0, inner_width, height)
+  else
+    -- letterbox
+    local inner_height = math.floor(width / ratio + 0.5)
+    gl.glViewport(0, math.floor((height - inner_height) / 2), width,
+                  inner_height)
+  end
+end
+
+local function log_frame_time(time)
+  table.insert(frame_times, time)
+  if #frame_times > max_sample_frames then
+    table.remove(frame_times, 1)
+  end
+end
+
+---- Public Interface ---------------------------------------------------------
+
+--- ### `set_max_frameskip(max_frameskip)`
+--- Sets the maximum number of updates to run before forcing a draw.
+---
+--- If more than this number of updates are queued to happen before a redraw,
+--- the rest will be discared.
+function kernel.set_max_frameskip(new_max_frameskip)
+  assert(type(new_max_frameskip) == 'number' and new_max_frameskip >= 1)
+  max_frameskip = new_max_frameskip
+end
+
+--- ### `set_fps(fps)`
+--- Sets the target frames-per-second.
+function kernel.set_fps(new_fps)
+  assert(type(new_fps) == 'number' and new_fps > 0)
+  fps = new_fps
+end
+
+--- ### `get_width()`
+--- Returns the current total window width in pixels. This includes borders
+--- when the ratio doesn't match the window size. Returns nil if called before
+--- the main loop and the width has never been set with `set_video_mode()`.
+function kernel.get_width() return width end
+
+--- ### `get_height()`
+--- Returns the current total window height in pixels. This includes borders
+--- when the ratio doesn't match the window size. Returns nil if called before
+--- the main loop and the height has never been set with `set_video_mode()`.
+function kernel.get_height() return height end
+
+--- ### `set_fullscreen(fullscreen)`
+--- Sets whether or not a fullscreen window should be opened. This must be
+--- called before entering the main loop.
+---
+--- The default is to open in a window.
+function kernel.set_fullscreen(fullscreen)
+  assert(not running, 'set_fullscreen must be called before the main loop')
+  use_fullscreen = fullscreen
+end
+
+--- ### `set_video_mode(width, height)`
+--- Sets the desired width/height of the window in pixels.
+---
+--- If the main loop hasn't yet been started, it will immediately change
+--- the window size (or change video modes in fullscreen). If called before
+--- entering the main loop, this sets the initial video mode, but has no
+--- immediate effect.
+---
+--- This does not set the desired ratio, so unless you set that as well you may
+--- end up with borders.
+function kernel.set_video_mode(w, h)
+  assert(w > 0)
+  assert(h > 0)
+  width = w
+  height = h
+  if running then
+    glfw.SetWindowSize(w, h)
+    update_viewport()
+  end
+end
+
+--- ### `set_window_title(title)`
+--- Sets the title of the window. Can be called before the main loop, in which
+--- case the window is opened with this title.
+function kernel.set_window_title(title)
+  window_title = title
+  if window_open then
+    glfw.SetWindowTitle(title)
+  end
+end
+
+--- ### `get_ratio()`
+--- Returns the screen ratio used within the window for the active area. See
+--- also `set_ratio()`. Returns nil if called before the main loop and no ratio
+--- has been set with `set_ratio()`.
+function kernel.get_ratio() return ratio end
+
+--- ### `set_ratio(ratio)`
+--- Sets the desired screen ratio.
+---
+--- If the window size doesn't match this ratio, then the ratio is used to set
+--- the opengl viewport shape within the window.
+---
+--- This must be set manually if a ratio other than 4/3 is wanted, since calls
+--- to `set_video_mode()` have no effect on it.
+function kernel.set_ratio(r)
+  assert(r > 0)
+  ratio = r
+  if running then update_viewport() end
+end
+
+--- ### `get_framerate()`
+--- Returns a running average of the number of `draw()` calls per second.
+--- Since multiple updates can happen per draw, this isn't the same as the
+--- number of updates per second, which should usually stay constant.
+function kernel.get_framerate()
+  if #frame_times >= 2 then
+    return (#frame_times - 1) / (frame_times[#frame_times] - frame_times[1])
+  else
+    return 1
+  end
+end
+
+--- ### `abort_main_loop()`
+--- Sets a flag to terminate the main loop at the next opportunity.
+---
+--- This function should be called from one of the scene callbacks; the loop
+--- will be aborted when the callback returns.
+function kernel.abort_main_loop()
+  assert(running)
+  running = false
+end
+
+--- ### `switch_scene(scene)`
+--- Queues up a scene to switch to.
+---
+--- This function should be called from one of the scene callbacks; the scenes
+--- will be switched when the callback returns.
+function kernel.switch_scene(scene)
+  assert(running)
+  next_scene = scene
+  running = false
+end
+
+---- Main Loop ----------------------------------------------------------------
+
+local function main_loop(scene)
+  local last_update_time = get_current_time()
+
+  -- filled in callbacks whenever glfw.SwapBuffers is called
+  local events = {}
+
+  glfw.SetWindowCloseCallback(function ()
+    table.insert(events, {type = 'quit'})
+    -- the scene decides whether to quit, so the close itself is cancelled
+    return false
+  end)
+
+  glfw.SetWindowSizeCallback(function (w, h)
+    table.insert(events, {type = 'resize', width = w, height = h})
+  end)
+
+  glfw.SetKeyCallback(function (key, action)
+    table.insert(events,
+      {type = 'key', key = key, is_down = action == glfw.PRESS})
+  end)
+
+  while true do
+    ---- handle events
+    local new_width, new_height
+    for _, event in ipairs(events) do
+      if event.type == 'resize' then
+        new_width = event.width
+        new_height = event.height
+      end
+      scene.handle_event(event)
+      if not running then return end
+    end
+    if new_width and (new_width ~= width or new_height ~= height) then
+      kernel.set_video_mode(new_width, new_height)
+    end
+
+    while #events ~= 0 do events[#events] = nil end
+
+    ---- update
+    do
+      -- wait until it's time to update at least once
+      local update_time = 1/fps
+      sleep_until(last_update_time + update_time)
+      local current_time = get_current_time()
+      log_frame_time(current_time)
+      -- if we would have to update for more than max_update_time, skip forward
+      local max_update_time = max_frameskip / fps + 0.001
+      local total_update_time = current_time - last_update_time
+      if max_update_time < total_update_time then
+        log.log_message(
+          "warning: underrun of " ..
+          math.ceil(1000 * (total_update_time - max_update_time)) ..
+          "ms")
+        last_update_time = current_time - max_update_time
+      end
+      -- update the right number of times
+      while last_update_time + update_time <= current_time do
+        last_update_time = last_update_time + update_time
+        scene.update(update_time)
+        if not running then return end
+      end
+    end
+
+    ---- draw
+    scene.draw()
+
+    local err = gl.glGetError()
+    if err ~= 0 then error('OpenGL error ' .. err) end
+
+    if not running then return end
+    glfw.SwapBuffers()
+  end
+end
+
+--- ### `start_main_loop(scene)`
+--- Initializes stuff and begins the main loop. `scene` is used as described in
+--- the introduction above.
+function kernel.start_main_loop(scene)
+  -- glfw.Terminate() needs to be called even if there is an error, since
+  -- otherwise it may not return the screen to its original resolution.
+  local success, message = xpcall(function ()
+    log.log_message "initializing glfw. . ."
+    if not glfw.Init() then
+      error("glfw initialization failed")
+    end
+    log.log_message "initializing mixer. . ."
+    assert(mixer.init())
+
+    running = true
+
+    log.log_message "detected video modes:"
+    for _, mode in ipairs(glfw.GetVideoModes()) do
+      log.log_message('  ' .. mode.Width .. 'x' .. mode.Height .. ' R' ..
+                      mode.RedBits .. ' G' .. mode.GreenBits .. ' B' ..
+                      mode.BlueBits)
+    end
+    if width == nil then
+      log.log_message('using desktop video mode')
+      local mode = glfw.GetDesktopMode()
+      width = mode.Width
+      height = mode.Height
+    end
+    if ratio == nil then
+      ratio = width / height
+    end
+    log.log_message("setting video mode to " .. width .. "x" .. height ..
+                    ". . .")
+    glfw.OpenWindow(width, height, window_title, use_fullscreen)
+    window_open = true
+    kernel.set_video_mode(width, height)
+
+    log.log_message "starting main loop"
+
+    next_scene = scene
+    while next_scene do
+      scene = next_scene
+      next_scene = nil
+      main_loop(scene)
+      if next_scene then
+        running = true
+      end
+    end
+  end, get_stack_trace)
+
+  log.log_message "shutting down"
+  window_open = false
+  glfw.Terminate()
+
+  if not success then error(message, 0) end
+end
+
+return kernel
