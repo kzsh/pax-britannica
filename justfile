@@ -32,6 +32,11 @@ trace-dump first last frames='12000':
 rng-vectors:
     lua5.4 test/rng_vectors.lua
 
+# Regenerate the collision differential-test vectors
+collision-vectors:
+    mkdir -p traces
+    lua5.4 test/collision_vectors.lua > traces/collision.txt
+
 # Rust: format, lint, test
 check:
     cargo fmt --check

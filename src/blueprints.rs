@@ -1,0 +1,287 @@
+//! `blueprints.lua`: what each kind of actor is made of.
+//!
+//! The Lua builds these from a list of script names and default field values,
+//! resolved by name at spawn time. Here each is a constructor that fills in the
+//! script structs directly -- typed, and the defaults become ordinary literals.
+//!
+//! **Script order is load-bearing.** It is the order the scripts run within an
+//! actor, so it is preserved exactly as `blueprints.lua` lists it.
+
+use crate::collision::Polygon;
+use crate::resources::SpriteId;
+use crate::rng::LuaRng;
+use crate::scripts::ScriptKind;
+use crate::scripts::bomber_ai::BomberAi;
+use crate::scripts::bullet::Bullet;
+use crate::scripts::collision::{Collision, CollisionType};
+use crate::scripts::easy_enemy_production::EasyEnemyProduction;
+use crate::scripts::factory_ai::FactoryAi;
+use crate::scripts::factory_damage::FactoryDamage;
+use crate::scripts::fighter_ai::FighterAi;
+use crate::scripts::frigate_ai::FrigateAi;
+use crate::scripts::heatseeking_ai::HeatseekingAi;
+use crate::scripts::production::Production;
+use crate::scripts::resources::Resources;
+use crate::scripts::ship::{Ship, ShipSprites};
+use crate::scripts::shooting::Weapon;
+use crate::scripts::sprite::Sprite;
+use crate::scripts::transform::Transform;
+use crate::v2::V2;
+use crate::world::Actor;
+
+/// A laser: cheap, fast, fired by fighters.
+pub fn laser(player: usize, pos: V2, facing: V2, velocity: V2) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Sprite,
+            ScriptKind::Collision,
+            ScriptKind::Bullet,
+        ],
+        transform: Some(Transform::facing(pos, facing)),
+        sprite: Some(Sprite::new(SpriteId::Laser)),
+        collision: Some(Collision {
+            poly: Polygon::rectangle(32.0, 1.0),
+            collision_type: CollisionType::Bullet,
+            damage: 10.0,
+        }),
+        bullet: Some(Bullet { velocity }),
+        player: Some(player),
+        ..Actor::new("laser")
+    }
+}
+
+/// A bomb: slow, enormously damaging, lobbed sideways by bombers.
+pub fn bomb(player: usize, pos: V2, facing: V2, velocity: V2) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Sprite,
+            ScriptKind::Collision,
+            ScriptKind::Bullet,
+        ],
+        transform: Some(Transform::facing(pos, facing)),
+        sprite: Some(Sprite::new(SpriteId::Bomb)),
+        collision: Some(Collision {
+            poly: Polygon::rectangle(4.0, 4.0),
+            collision_type: CollisionType::Bullet,
+            damage: 200.0,
+        }),
+        bullet: Some(Bullet { velocity }),
+        player: Some(player),
+        ..Actor::new("bomb")
+    }
+}
+
+/// A missile: a projectile that steers, so it carries `ship` and an AI rather
+/// than the `bullet` script. Everything that inspects projectiles has to cope
+/// with that.
+pub fn missile(player: usize, pos: V2, velocity: V2) -> Actor {
+    let mut ship = Ship::new(0.055, 0.15, 1.0, None);
+    ship.velocity = velocity;
+
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Sprite,
+            ScriptKind::Collision,
+            ScriptKind::Ship,
+            ScriptKind::HeatseekingAi,
+        ],
+        transform: Some(Transform::at(pos)),
+        sprite: Some(Sprite::new(SpriteId::Missile)),
+        collision: Some(Collision {
+            poly: Polygon::rectangle(5.0, 2.0),
+            collision_type: CollisionType::Bullet,
+            damage: 40.0,
+        }),
+        ship: Some(ship),
+        heatseeking_ai: Some(HeatseekingAi::default()),
+        player: Some(player),
+        ..Actor::new("missile")
+    }
+}
+
+pub fn fighter(player: usize, pos: V2, facing: V2) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Sprite,
+            ScriptKind::Collision,
+            ScriptKind::Ship,
+            ScriptKind::FighterShooting,
+            ScriptKind::FighterAi,
+        ],
+        transform: Some(Transform::facing(pos, facing)),
+        sprite: Some(Sprite::blank()),
+        collision: Some(Collision {
+            poly: Polygon::rectangle(9.0, 6.0),
+            collision_type: CollisionType::Ship,
+            damage: 0.0,
+        }),
+        ship: Some(Ship::new(0.025, 0.1, 40.0, Some(ShipSprites::Fighter))),
+        fighter_shooting: Some(Weapon::fighter()),
+        fighter_ai: Some(FighterAi::default()),
+        player: Some(player),
+        ..Actor::new("fighter")
+    }
+}
+
+pub fn bomber(player: usize, pos: V2, facing: V2) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Sprite,
+            ScriptKind::Collision,
+            ScriptKind::Ship,
+            ScriptKind::BomberAi,
+        ],
+        transform: Some(Transform::facing(pos, facing)),
+        sprite: Some(Sprite::blank()),
+        collision: Some(Collision {
+            poly: Polygon::rectangle(22.0, 14.0),
+            collision_type: CollisionType::Ship,
+            damage: 0.0,
+        }),
+        ship: Some(Ship::new(0.03, 0.05, 250.0, Some(ShipSprites::Bomber))),
+        bomber_ai: Some(BomberAi::default()),
+        player: Some(player),
+        ..Actor::new("bomber")
+    }
+}
+
+pub fn frigate(player: usize, pos: V2, facing: V2) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Sprite,
+            ScriptKind::Collision,
+            ScriptKind::Ship,
+            ScriptKind::FrigateShooting,
+            ScriptKind::FrigateAi,
+        ],
+        transform: Some(Transform::facing(pos, facing)),
+        sprite: Some(Sprite::blank()),
+        collision: Some(Collision {
+            poly: Polygon::rectangle(54.0, 36.0),
+            collision_type: CollisionType::Ship,
+            damage: 0.0,
+        }),
+        ship: Some(Ship::new(0.01, 0.01, 1400.0, Some(ShipSprites::Frigate))),
+        frigate_shooting: Some(Weapon::frigate()),
+        frigate_ai: Some(FrigateAi::default()),
+        player: Some(player),
+        ..Actor::new("frigate")
+    }
+}
+
+/// The shared half of the two factory blueprints: everything down to the
+/// production dial. They differ only in who works the button.
+fn factory(player: usize, pos: V2, facing: V2) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Sprite,
+            ScriptKind::Collision,
+            ScriptKind::Ship,
+            ScriptKind::FactoryDamage,
+            ScriptKind::FactoryAi,
+            ScriptKind::Resources,
+            ScriptKind::Production,
+        ],
+        transform: Some(Transform::facing(pos, facing)),
+        sprite: Some(Sprite::blank()),
+        collision: Some(Collision {
+            poly: Polygon::rectangle(170.0, 100.0),
+            collision_type: CollisionType::Ship,
+            damage: 0.0,
+        }),
+        ship: Some(Ship::new(
+            0.00028,
+            0.002,
+            20000.0,
+            Some(ShipSprites::Factory),
+        )),
+        factory_damage: Some(FactoryDamage::default()),
+        factory_ai: Some(FactoryAi::default()),
+        resources: Some(Resources::default()),
+        production: Some(Production::default()),
+        player: Some(player),
+        ..Actor::new("factory")
+    }
+}
+
+/// A factory driven by a human on a button.
+pub fn player_factory(player: usize, pos: V2, facing: V2) -> Actor {
+    let mut actor = factory(player, pos, facing);
+    actor.scripts.push(ScriptKind::PlayerProduction);
+    actor
+}
+
+/// A factory driven by the canned build orders in
+/// `scripts/easy_enemy_production.lua`.
+///
+/// Takes the rng because that script's chunk body runs at spawn: three draws,
+/// and a 20% cut to the factory's income. See its doc comment.
+pub fn easy_enemy_factory(rng: &mut LuaRng, player: usize, pos: V2, facing: V2) -> Actor {
+    let mut actor = factory(player, pos, facing);
+    actor.scripts.push(ScriptKind::EasyEnemyProduction);
+
+    let resources = actor
+        .resources
+        .as_mut()
+        .expect("the factory blueprint carries resources");
+    actor.easy_enemy_production = Some(EasyEnemyProduction::new(rng, resources));
+
+    actor
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::v2::v2;
+
+    #[test]
+    fn a_bombers_script_order_matches_the_blueprint() {
+        // the ship moves before the AI steers it, every frame
+        let actor = bomber(1, V2::ZERO, V2::I);
+        assert_eq!(
+            actor.scripts,
+            [
+                ScriptKind::Transform,
+                ScriptKind::Sprite,
+                ScriptKind::Collision,
+                ScriptKind::Ship,
+                ScriptKind::BomberAi,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_missile_is_a_ship_not_a_bullet() {
+        let actor = missile(1, V2::ZERO, v2(1.0, 0.0));
+        assert!(actor.bullet.is_none());
+        assert!(actor.ship.is_some());
+        assert_eq!(actor.ship.as_ref().unwrap().velocity, v2(1.0, 0.0));
+    }
+
+    #[test]
+    fn projectile_damage_matches_the_blueprints() {
+        let damage = |a: Actor| a.collision.as_ref().unwrap().damage;
+        assert_eq!(damage(laser(1, V2::ZERO, V2::I, V2::ZERO)), 10.0);
+        assert_eq!(damage(bomb(1, V2::ZERO, V2::I, V2::ZERO)), 200.0);
+        assert_eq!(damage(missile(1, V2::ZERO, V2::ZERO)), 40.0);
+    }
+
+    #[test]
+    fn ships_start_at_full_health() {
+        for actor in [
+            fighter(1, V2::ZERO, V2::I),
+            bomber(1, V2::ZERO, V2::I),
+            frigate(1, V2::ZERO, V2::I),
+        ] {
+            let ship = actor.ship.as_ref().unwrap();
+            assert_eq!(ship.hit_points, ship.max_hit_points);
+        }
+    }
+}
