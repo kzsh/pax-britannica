@@ -10,21 +10,26 @@ pub mod bomber_ai;
 pub mod bomber_shooting;
 pub mod bullet;
 pub mod collision;
+pub mod countdown;
 pub mod easy_enemy_production;
 pub mod factory_ai;
 pub mod factory_damage;
+pub mod fade;
 pub mod fighter_ai;
 pub mod fighter_shooting;
 pub mod frigate_ai;
 pub mod frigate_shooting;
+pub mod game_flow;
 pub mod heatseeking_ai;
 pub mod player_production;
 #[cfg(test)]
 pub mod probe;
 pub mod production;
 pub mod resources;
+pub mod selector;
 pub mod ship;
 pub mod shooting;
+pub mod splash;
 pub mod sprite;
 pub mod transform;
 
@@ -55,11 +60,22 @@ pub enum ScriptKind {
     Production,
     PlayerProduction,
     EasyEnemyProduction,
+    /// The scene state machine, from `scripts/game_flow.lua`.
+    GameFlow,
+    Countdown,
+    Selector,
+    /// The title screen's art. No state and no behaviour; it exists so the actor
+    /// carrying it is a real one in the spawn order.
+    Splash,
+    Fade,
     /// The singleton that latches input, from `components/the_one_button.lua`.
     TheOneButton,
     /// The singleton that runs the broad/narrow phase, from
     /// `components/collision.lua`.
     CollisionChecker,
+    /// The generic actor `components/log.lua` creates, whose whole job is to
+    /// count elapsed frames.
+    LogTimer,
     #[cfg(test)]
     Probe,
 }
@@ -86,8 +102,13 @@ pub fn dispatch(game: &mut Game, id: ActorId, kind: ScriptKind, phase: Phase) {
         (ScriptKind::Production, Phase::Update) => production::update(game, id),
         (ScriptKind::PlayerProduction, Phase::Update) => player_production::update(game, id),
         (ScriptKind::EasyEnemyProduction, Phase::Update) => easy_enemy_production::update(game, id),
+        (ScriptKind::GameFlow, Phase::Update) => game_flow::update(game, id),
+        (ScriptKind::Countdown, Phase::Update) => countdown::update(game, id),
+        (ScriptKind::Selector, Phase::Update) => selector::update(game, id),
+        (ScriptKind::Fade, Phase::Update) => fade::update(game, id),
         (ScriptKind::TheOneButton, Phase::UpdateSetup) => game.the_one_button.latch(),
         (ScriptKind::CollisionChecker, Phase::CollisionCheck) => collision::check_all(game),
+        (ScriptKind::LogTimer, Phase::Update) => game.log.record_time(),
 
         // The two draws that are not purely pixels: the dial carries the
         // needle's state across frames, and the damage flicker takes a draw off
@@ -98,8 +119,10 @@ pub fn dispatch(game: &mut Game, id: ActorId, kind: ScriptKind, phase: Phase) {
         #[cfg(test)]
         (ScriptKind::Probe, Phase::Update) => probe::update(game, id),
 
-        // Transform is pure data, and Sprite's draw lands with the renderer in
-        // phase 4; both still occupy their place in the script order.
+        // Transform is pure data; Sprite, Splash and the fade's black rectangle
+        // are draws with no state and no random draws behind them, so they land
+        // with the renderer in phase 4. All of them still occupy their place in
+        // the script order.
         _ => {}
     }
 }

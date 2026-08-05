@@ -101,6 +101,10 @@ pub struct Actor {
     pub frigate_ai: Option<crate::scripts::frigate_ai::FrigateAi>,
     pub frigate_shooting: Option<crate::scripts::shooting::Weapon>,
     pub heatseeking_ai: Option<crate::scripts::heatseeking_ai::HeatseekingAi>,
+    pub game_flow: Option<crate::scripts::game_flow::GameFlow>,
+    pub countdown: Option<crate::scripts::countdown::Countdown>,
+    pub selector: Option<crate::scripts::selector::Selector>,
+    pub fade: Option<crate::scripts::fade::Fade>,
 
     #[cfg(test)]
     pub probe: Option<crate::scripts::probe::Probe>,

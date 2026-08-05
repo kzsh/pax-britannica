@@ -24,6 +24,10 @@ pub struct Game {
     pub log: Log,
     /// Every player's entire input, latched once per frame.
     pub the_one_button: TheOneButton,
+    /// Raised by `scripts/game_flow.lua`'s game-over fade. The kernel does not
+    /// switch scenes where it is asked to: the current frame finishes its update
+    /// *and* its draw first. See [`crate::the_game::step`].
+    pub scene_switch_requested: bool,
 
     /// Labels of the probe scripts that have run, in order.
     #[cfg(test)]
@@ -43,13 +47,23 @@ impl Game {
     }
 
     pub fn with_seed(seed: i64) -> Self {
+        Self::empty(LuaRng::new(seed, 0))
+    }
+
+    /// An empty game around an existing random stream.
+    ///
+    /// A restart builds one of these: the world, the components and the log are
+    /// all new, but the generator carries on from where the last match left it.
+    /// [`crate::the_game::make`] is what fills it in.
+    pub fn empty(rng: LuaRng) -> Self {
         Self {
             world: World::new(),
-            rng: LuaRng::new(seed, 0),
+            rng,
             collision: CollisionWorld::new(),
             particles: Particles::new(),
             log: Log::new(),
             the_one_button: TheOneButton::new(),
+            scene_switch_requested: false,
             #[cfg(test)]
             probe_log: Vec::new(),
         }

@@ -14,6 +14,7 @@ pub mod resources;
 pub mod rng;
 pub mod scripts;
 pub mod targeting;
+pub mod the_game;
 pub mod the_one_button;
 pub mod v2;
 pub mod world;

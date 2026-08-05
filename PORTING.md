@@ -2,11 +2,11 @@
 
 ## Where things stand
 
-Phases 0, 1 and 2 are done. Phase 3 is two-thirds done: clusters 1–4 of 6.
+Phases 0, 1 and 2 are done. Phase 3 is five-sixths done: clusters 1–5 of 6.
 
-**146 tests pass, `cargo clippy --all --tests` is clean.**
+**177 tests pass, `cargo fmt --check` and `cargo clippy --all --benches --tests --examples --all-features` are clean.**
 
-Phase 0 is committed (`438796e Commit phase 0`: `Cargo.toml`, `src/rng.rs`, `src/lib.rs`, the `test/` harness and `traces/golden.txt`). **Everything from phases 1–3 is uncommitted working tree** — all of `src/scripts/`, `src/v2.rs`, `src/collision.rs`, `src/world.rs`, `src/game.rs`, `src/blueprints.rs`, `src/particles.rs`, `src/log.rs`, `src/targeting.rs`, `src/resources.rs`, `src/constants.rs`, `tests/`, `traces/collision.txt`, and the two newer generator scripts in `test/`.
+Phase 0 is committed (`438796e Commit phase 0`: `Cargo.toml`, `src/rng.rs`, `src/lib.rs`, the `test/` harness and `traces/golden.txt`). **Everything from phases 1–3 is uncommitted working tree** — all of `src/scripts/`, `src/v2.rs`, `src/collision.rs`, `src/world.rs`, `src/game.rs`, `src/blueprints.rs`, `src/particles.rs`, `src/log.rs`, `src/targeting.rs`, `src/resources.rs`, `src/constants.rs`, `src/the_game.rs`, `tests/`, `traces/collision.txt`, and the two newer generator scripts in `test/`.
 
 | Area | State |
 | --- | --- |
@@ -16,12 +16,12 @@ Phase 0 is committed (`438796e Commit phase 0`: `Cargo.toml`, `src/rng.rs`, `src
 | `ship`, `bullet`, `targeting`, `log`, `particles`, collision resolution | Done |
 | Fighter / bomber / frigate AI + shooting, `heatseeking_ai`, `blueprints` | Done |
 | `resources`, `production`, `factory_ai`, `factory_damage`, both producers | Done, checked against the interpreter |
-| `game_flow`, `countdown`, `selector`, `splash`, `fade` | **Not started** |
+| `game_flow`, `countdown`, `selector`, `splash`, `fade`, scene switching | Done, checked against the interpreter |
 | `debris`, `fish`, `background_fx` | **Not started** |
 | Rust headless runner + trace writer | **Not started** — nothing has been compared to the oracle yet |
 | Phase 4 (macroquad platform) | Not started |
 
-There is **no Rust binary yet**; the crate is a library plus tests. `cargo test` is the only thing to run. Rust lives at `~/.cargo/bin` and is not on `PATH`.
+There is **no Rust binary yet**; the crate is a library plus tests. `cargo test` is the only thing to run. Rust lives at `~/.cargo/bin` and is not on `PATH`. The game does now run end to end in Rust: `the_game::make` builds a scene and `the_game::step` is one frame of the kernel loop, so a driver is a `for` loop over `step` that writes `game.the_one_button.keys` first.
 
 ### Environment
 
@@ -31,7 +31,7 @@ There is **no Rust binary yet**; the crate is a library plus tests. `cargo test`
 ### Commands
 
 ```bash
-cargo test                                    # 119 tests
+cargo test                                    # 177 tests
 cargo clippy --all --benches --tests --examples --all-features
 lua5.4 test/headless.lua 12000                # Lua smoke test
 lua5.4 test/trace.lua 12000 --out traces/golden.txt          # regenerate oracle (~100s)
@@ -41,7 +41,9 @@ lua5.4 test/particle_draws.lua                # RNG draw counts per particle eff
 
 ### The next concrete step
 
-Port cluster 5: `game_flow` and the scene state machine (`countdown`, `selector`, `splash`, `fade`). It is the last thing between here and the first trace comparison — factories can build ships now, but nothing yet starts a match.
+Port cluster 6, the cosmetics: `background_fx`, `debris`, `fish`. Small, but neither optional nor deferrable to phase 4 — `scripts/background_fx.lua` takes **two draws every single frame** for its two `math.random() < ...` tests, plus a handful more each time one of them passes, and it runs from frame 1 of every scene. Measure the per-spawn count against the interpreter rather than counting the calls by eye.
+
+Its actor belongs in `the_game::make` between `background` and `game_flow`, and `the_game::tests::the_scene_is_built_in_the_order_the_interpreter_builds_it` is the list to add it to.
 
 Then build `src/bin/trace.rs`: mirror `test/harness.lua`'s input schedule exactly (keys `A`/`F`/`H`/`L`, players 1 and 2 join on frames 2–3, then `frame % (120 * i * i)` hold patterns), emit the same one-line-per-frame format as `test/trace.lua`, and diff against `traces/golden.txt`. Expect the first comparison to diverge early; that is the tool working.
 
@@ -166,14 +168,78 @@ Dead actors keep their data forever and `ActorId` is never reused, because the L
 
 **Design decision:** the owning `player` is hoisted onto `Actor` rather than living on the `ship`/`bullet` scripts as it does in Lua, which removes the `self.ship and self.ship.player or self.bullet.player` fallback. Every collidable has exactly one.
 
-### Phase 3 — Game logic, script by script — **IN PROGRESS (3 of 6 clusters)**
+### Phase 3 — Game logic, script by script — **IN PROGRESS (5 of 6 clusters)**
 
 1. ~~`transform`, `sprite` (data only), `collision` + `targeting`~~ **done**
 2. ~~`ship`, `bullet`, `heatseeking_ai`, `particles`, `log`, collision resolution~~ **done**
 3. ~~`fighter_*`, `bomber_*`, `frigate_*` AI and shooting, `blueprints`~~ **done**
 4. ~~`resources`, `production`, `player_production`, `easy_enemy_production`, `factory_ai`, `factory_damage`~~ **done**
-5. `game_flow`, `countdown`, `selector`, `splash`, `fade` — the scene state machine — **next**
-6. Cosmetics: `debris`, `fish`, `background_fx`
+5. ~~`game_flow`, `countdown`, `selector`, `splash`, `fade` — the scene state machine, plus `the_game.lua` itself~~ **done**
+6. Cosmetics: `debris`, `fish`, `background_fx` — **next**
+
+#### Cluster 5: the scene machine
+
+**Callbacks are named, not boxed.** The Lua drives the whole machine through
+closures over `scripts/game_flow.lua`'s chunk locals — the fade calls back on
+completion, each selector calls the countdown's `reset_counter`, the countdown
+calls `start_game`. There are exactly three callback sites in the game and five
+distinct callbacks, so each is an `enum` carrying an `ActorId`
+(`FadeCallback`, `CountdownCallback`, `SelectorCallback`). Boxed `FnOnce`s
+would be closer to the original's shape and worse in every way that matters:
+the script structs have to stay `PartialEq` and `Debug` for the differential
+trace, a closure would need interior mutability to touch the game it was spawned
+from, and the enums make the state machine readable from the types. Recorded
+here because it is the one place in the port where the Rust is structurally
+*unlike* the Lua rather than a transliteration of it.
+
+**Scene switching.** `kernel.switch_scene(the_game.make())` replaces the world,
+the components and the log, and the RNG is **not** reseeded (`the_game.lua` calls
+`math.randomseed()`; `test/harness.lua` neuters it). `the_game::make` therefore
+takes the `LuaRng` and `Game::empty` wraps it. The kernel does *not* switch where
+it is asked: `switch_scene` only records the new scene, so the dying frame still
+finishes its update **and its draw** — which matters, because `factory_damage`
+draws off the shared stream. `the_game::step` is that ordering, and
+`the_frame_that_switches_scenes_still_runs_its_draw_phase` pins it.
+
+Building a scene is done eagerly in `make`, where the Lua defers `init` to the
+top of the first update. That is only equivalent because scene construction takes
+no draws; `building_a_scene_takes_no_draws` is the guard, and if it ever fails
+the construction has to move.
+
+**Engine components create actors.** `game.init_component` is not just a table:
+`components/{collision,log,the_one_button,fast_forward}.lua` and four dokidoki
+components each call `game.actors.new_generic`, so a scene starts with eight
+actors before `background` — and that is spawn order, hence update and draw
+order, and they are all in the golden trace. `the_game::make` spawns them,
+including the five that do nothing at all outside a window.
+
+New quirks, copied deliberately:
+
+- **The game-over fade is respawned every frame.** `game_flow`'s `in_game` branch
+  has no guard and no state change, so once `game_over_timer > 300` a *fresh*
+  `fade_out` is created every frame — sixty of them stack up before the first
+  lands. All of them are in the trace, and the first to finish takes the rest
+  with it. Pinned by
+  `the_game_over_fade_is_respawned_every_frame_after_the_timer_expires`.
+- **`generate_positions` is dead code.** `start_game` computes it and then indexes
+  the `POSITIONS` table instead. It consumes no RNG, so it is simply not ported.
+- **`countdown.lua` uses Lua's floor modulo.** `counter % 1` on the frame the
+  clock goes negative wraps *up*, where Rust's `%` would go down; `sin` is odd,
+  so the difference does not wash out. `rem_euclid`, and a test that fails
+  without it.
+- The five-second clock actually runs 301 frames: repeated subtraction of `1/60`
+  leaves `1.28e-14` on the frame five seconds are up, which is still `> 0`.
+
+Two notes for whoever writes `src/bin/trace.rs`, both discovered here:
+
+- The trace walks the upvalues of *every function-valued field* on a script,
+  and `callback` is one. So a countdown carries `countdown^CENTER` and a fade
+  carries `fade^CENTER` — `game_flow`'s chunk locals, leaking out through the
+  closure. Selectors similarly carry `selector^counter`, the countdown's clock.
+  Reproducing the trace means emitting those aliases, not just each script's own
+  state.
+- Chunk-level *constants* are upvalues too, so the trace prints
+  `selector^SEGMENTS = 16` and friends every frame.
 
 **Two things cluster 4 turned up, both about draws in the *draw* phase.** The
 port had assumed `draw` was inert until phase 4; it is not:
@@ -249,6 +315,7 @@ Lua source on the left, its Rust counterpart on the right. Absent means not yet 
 | Lua | Rust |
 | --- | --- |
 | `dokidoki/game.lua` | `src/world.rs`, `src/game.rs` |
+| `the_game.lua`, `dokidoki/kernel.lua`'s scene switch | `src/the_game.rs` |
 | `dokidoki/v2.lua` | `src/v2.rs` |
 | `dokidoki/collision.lua`, `dokidoki-support/collision.c` | `src/collision.rs` |
 | Lua 5.4 `lmathlib.c` | `src/rng.rs` |
@@ -271,6 +338,11 @@ Lua source on the left, its Rust counterpart on the right. Absent means not yet 
 | `scripts/player_production.lua` | `src/scripts/player_production.rs` |
 | `scripts/easy_enemy_production.lua` | `src/scripts/easy_enemy_production.rs` |
 | `scripts/factory_damage.lua` | `src/scripts/factory_damage.rs` |
+| `scripts/game_flow.lua` | `src/scripts/game_flow.rs` |
+| `scripts/countdown.lua` | `src/scripts/countdown.rs` |
+| `scripts/selector.lua` | `src/scripts/selector.rs` |
+| `scripts/fade.lua` | `src/scripts/fade.rs` (the black quad is phase 4) |
+| `scripts/splash.lua` | `src/scripts/splash.rs` (positions only; phase 4 draws it) |
 | `dokidoki/base.lua` | none needed — Rust iterators |
 | `dokidoki/kernel.lua`, `graphics.lua`, `default_font.lua` | phase 4 |
 

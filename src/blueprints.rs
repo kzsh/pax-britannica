@@ -14,17 +14,21 @@ use crate::scripts::ScriptKind;
 use crate::scripts::bomber_ai::BomberAi;
 use crate::scripts::bullet::Bullet;
 use crate::scripts::collision::{Collision, CollisionType};
+use crate::scripts::countdown::{Countdown, CountdownCallback};
 use crate::scripts::easy_enemy_production::EasyEnemyProduction;
 use crate::scripts::factory_ai::FactoryAi;
 use crate::scripts::factory_damage::FactoryDamage;
+use crate::scripts::fade::{Fade, FadeCallback};
 use crate::scripts::fighter_ai::FighterAi;
 use crate::scripts::frigate_ai::FrigateAi;
+use crate::scripts::game_flow::GameFlow;
 use crate::scripts::heatseeking_ai::HeatseekingAi;
 use crate::scripts::production::Production;
 use crate::scripts::resources::Resources;
+use crate::scripts::selector::Selector;
 use crate::scripts::ship::{Ship, ShipSprites};
 use crate::scripts::shooting::Weapon;
-use crate::scripts::sprite::Sprite;
+use crate::scripts::sprite::{Color, Sprite};
 use crate::scripts::transform::Transform;
 use crate::v2::V2;
 use crate::world::Actor;
@@ -234,6 +238,114 @@ pub fn easy_enemy_factory(rng: &mut LuaRng, player: usize, pos: V2, facing: V2) 
     actor.easy_enemy_production = Some(EasyEnemyProduction::new(rng, resources));
 
     actor
+}
+
+/// `blueprints.background`: the sea floor, drawn behind everything.
+pub fn background() -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::Transform, ScriptKind::Sprite],
+        transform: Some(Transform::default()),
+        sprite: Some(Sprite::new(SpriteId::Background)),
+        ..Actor::new("background")
+    }
+}
+
+/// `blueprints.game_flow`: the scene state machine, one per scene.
+pub fn game_flow() -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::GameFlow],
+        game_flow: Some(GameFlow::default()),
+        ..Actor::new("game_flow")
+    }
+}
+
+/// `blueprints.splash`: the title and credits on the menu screen.
+pub fn splash() -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::Splash],
+        ..Actor::new("splash")
+    }
+}
+
+/// `blueprints.selection_factory`: one of the four "press to join" factories.
+///
+/// The sprite is set twice, as in the Lua: the blueprint dims it to 0.2 grey,
+/// and the script body then picks the player's own factory art.
+pub fn selection_factory(player: usize, pos: V2) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Sprite,
+            ScriptKind::Selector,
+        ],
+        transform: Some(Transform::facing(pos, V2::J)),
+        sprite: Some(Sprite {
+            image: Some(SpriteId::Factory(player)),
+            color: Some(Color::rgb(0.2, 0.2, 0.2)),
+        }),
+        selector: Some(Selector::new(player)),
+        ..Actor::new("selection_factory")
+    }
+}
+
+/// `blueprints.countdown`. The blueprint's own position is the middle of the
+/// screen; `scripts/game_flow.lua` always overrides it, and so does this.
+pub fn countdown(pos: V2, callback: CountdownCallback) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Countdown,
+            ScriptKind::Sprite,
+            ScriptKind::Transform,
+        ],
+        countdown: Some(Countdown::new(callback)),
+        sprite: Some(Sprite::blank()),
+        transform: Some(Transform::at(pos)),
+        ..Actor::new("countdown")
+    }
+}
+
+/// `blueprints.fade_in`: black to clear over one second.
+pub fn fade_in() -> Actor {
+    fade(Fade::fade_in())
+}
+
+/// `blueprints.fade_out`: clear to black over one second, then the callback.
+pub fn fade_out(callback: FadeCallback) -> Actor {
+    fade(Fade::fade_out(callback))
+}
+
+fn fade(fade: Fade) -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::Fade],
+        fade: Some(fade),
+        ..Actor::new("fade")
+    }
+}
+
+/// The generic actor `components/collision.lua` creates to get its
+/// `collision_check` callback.
+pub fn collision_checker() -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::CollisionChecker],
+        ..Actor::new("collision")
+    }
+}
+
+/// The generic actor `components/log.lua` creates to count elapsed frames.
+pub fn log_timer() -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::LogTimer],
+        ..Actor::new("log")
+    }
+}
+
+/// The generic actor `components/the_one_button.lua` creates to latch input in
+/// `update_setup`.
+pub fn the_one_button() -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::TheOneButton],
+        ..Actor::new("the_one_button")
+    }
 }
 
 #[cfg(test)]
