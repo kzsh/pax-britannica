@@ -89,6 +89,18 @@ interpreter:
 lua5.4 test/headless.lua
 ```
 
+### The Rust port
+
+A Rust rewrite is in progress alongside the Lua; see [PORTING.md](PORTING.md).
+All of the game logic is ported. The renderer, on macroquad, is written but not
+yet verified on a screen.
+
+```bash
+cargo run --release --bin pax               # the game, keyboard only for now
+cargo run --release --bin headless -- 12000 # the game with no window, and a summary
+cargo test
+```
+
 ## Credits
 
 Game design and programming by Henk Boom, Renaud Bédard and Matthew Gallant.

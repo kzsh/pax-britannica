@@ -6,17 +6,20 @@
 //! out of the way: a script can reach any other actor through the game without
 //! holding a borrow across the call.
 
+pub mod background_fx;
 pub mod bomber_ai;
 pub mod bomber_shooting;
 pub mod bullet;
 pub mod collision;
 pub mod countdown;
+pub mod debris;
 pub mod easy_enemy_production;
 pub mod factory_ai;
 pub mod factory_damage;
 pub mod fade;
 pub mod fighter_ai;
 pub mod fighter_shooting;
+pub mod fish;
 pub mod frigate_ai;
 pub mod frigate_shooting;
 pub mod game_flow;
@@ -64,6 +67,11 @@ pub enum ScriptKind {
     GameFlow,
     Countdown,
     Selector,
+    /// The per-scene spawner of background clutter, from
+    /// `scripts/background_fx.lua`.
+    BackgroundFx,
+    Debris,
+    Fish,
     /// The title screen's art. No state and no behaviour; it exists so the actor
     /// carrying it is a real one in the spawn order.
     Splash,
@@ -76,6 +84,9 @@ pub enum ScriptKind {
     /// The generic actor `components/log.lua` creates, whose whole job is to
     /// count elapsed frames.
     LogTimer,
+    /// The generic actor `components/particles.lua` creates. It ages every
+    /// emitter once a frame, and it draws them in two layers.
+    ParticleEmitters,
     #[cfg(test)]
     Probe,
 }
@@ -106,9 +117,13 @@ pub fn dispatch(game: &mut Game, id: ActorId, kind: ScriptKind, phase: Phase) {
         (ScriptKind::Countdown, Phase::Update) => countdown::update(game, id),
         (ScriptKind::Selector, Phase::Update) => selector::update(game, id),
         (ScriptKind::Fade, Phase::Update) => fade::update(game, id),
+        (ScriptKind::BackgroundFx, Phase::Update) => background_fx::update(game, id),
+        (ScriptKind::Debris, Phase::Update) => debris::update(game, id),
+        (ScriptKind::Fish, Phase::Update) => fish::update(game, id),
         (ScriptKind::TheOneButton, Phase::UpdateSetup) => game.the_one_button.latch(),
         (ScriptKind::CollisionChecker, Phase::CollisionCheck) => collision::check_all(game),
         (ScriptKind::LogTimer, Phase::Update) => game.log.record_time(),
+        (ScriptKind::ParticleEmitters, Phase::Update) => game.particles.update(),
 
         // The two draws that are not purely pixels: the dial carries the
         // needle's state across frames, and the damage flicker takes a draw off

@@ -1,8 +1,16 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-default: headless
+default: check
 
-# Smoke-test the game logic with no window
+# Play it
+run:
+    cargo run --release --bin pax
+
+# Run the Rust game with no window and print a summary
+smoke frames='12000':
+    cargo run --release --bin headless -- {{frames}}
+
+# Smoke-test the original Lua with no window
 headless frames='1200':
     lua5.4 test/headless.lua {{frames}}
 

@@ -15,11 +15,13 @@ use crate::scripts::bomber_ai::BomberAi;
 use crate::scripts::bullet::Bullet;
 use crate::scripts::collision::{Collision, CollisionType};
 use crate::scripts::countdown::{Countdown, CountdownCallback};
+use crate::scripts::debris::Debris;
 use crate::scripts::easy_enemy_production::EasyEnemyProduction;
 use crate::scripts::factory_ai::FactoryAi;
 use crate::scripts::factory_damage::FactoryDamage;
 use crate::scripts::fade::{Fade, FadeCallback};
 use crate::scripts::fighter_ai::FighterAi;
+use crate::scripts::fish::Fish;
 use crate::scripts::frigate_ai::FrigateAi;
 use crate::scripts::game_flow::GameFlow;
 use crate::scripts::heatseeking_ai::HeatseekingAi;
@@ -32,6 +34,16 @@ use crate::scripts::sprite::{Color, Sprite};
 use crate::scripts::transform::Transform;
 use crate::v2::V2;
 use crate::world::Actor;
+
+/// `scripts/ship.lua`'s chunk body: a ship wears its owner's colours at full
+/// brightness. The blueprints leave the sprite blank and the script fills it in
+/// at spawn, which is one step in Lua and one call here.
+fn ship_sprite(sprites: ShipSprites, player: usize) -> Sprite {
+    Sprite {
+        image: Some(sprites.for_player(player)),
+        color: Some(Color::WHITE),
+    }
+}
 
 /// A laser: cheap, fast, fired by fighters.
 pub fn laser(player: usize, pos: V2, facing: V2, velocity: V2) -> Actor {
@@ -117,7 +129,7 @@ pub fn fighter(player: usize, pos: V2, facing: V2) -> Actor {
             ScriptKind::FighterAi,
         ],
         transform: Some(Transform::facing(pos, facing)),
-        sprite: Some(Sprite::blank()),
+        sprite: Some(ship_sprite(ShipSprites::Fighter, player)),
         collision: Some(Collision {
             poly: Polygon::rectangle(9.0, 6.0),
             collision_type: CollisionType::Ship,
@@ -141,7 +153,7 @@ pub fn bomber(player: usize, pos: V2, facing: V2) -> Actor {
             ScriptKind::BomberAi,
         ],
         transform: Some(Transform::facing(pos, facing)),
-        sprite: Some(Sprite::blank()),
+        sprite: Some(ship_sprite(ShipSprites::Bomber, player)),
         collision: Some(Collision {
             poly: Polygon::rectangle(22.0, 14.0),
             collision_type: CollisionType::Ship,
@@ -165,7 +177,7 @@ pub fn frigate(player: usize, pos: V2, facing: V2) -> Actor {
             ScriptKind::FrigateAi,
         ],
         transform: Some(Transform::facing(pos, facing)),
-        sprite: Some(Sprite::blank()),
+        sprite: Some(ship_sprite(ShipSprites::Frigate, player)),
         collision: Some(Collision {
             poly: Polygon::rectangle(54.0, 36.0),
             collision_type: CollisionType::Ship,
@@ -194,7 +206,7 @@ fn factory(player: usize, pos: V2, facing: V2) -> Actor {
             ScriptKind::Production,
         ],
         transform: Some(Transform::facing(pos, facing)),
-        sprite: Some(Sprite::blank()),
+        sprite: Some(ship_sprite(ShipSprites::Factory, player)),
         collision: Some(Collision {
             poly: Polygon::rectangle(170.0, 100.0),
             collision_type: CollisionType::Ship,
@@ -247,6 +259,48 @@ pub fn background() -> Actor {
         transform: Some(Transform::default()),
         sprite: Some(Sprite::new(SpriteId::Background)),
         ..Actor::new("background")
+    }
+}
+
+/// `blueprints.background_fx`: the spawner that drops debris and fish.
+pub fn background_fx() -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::BackgroundFx],
+        ..Actor::new("background_fx")
+    }
+}
+
+/// `blueprints.debris`. The position and the sprite are picked by
+/// `scripts/background_fx.lua`; the rest of the mote's character is in
+/// [`Debris`].
+pub fn debris(pos: V2, sprite: usize, debris: Debris) -> Actor {
+    Actor {
+        scripts: vec![
+            ScriptKind::Transform,
+            ScriptKind::Debris,
+            ScriptKind::Sprite,
+        ],
+        transform: Some(Transform::at(pos)),
+        debris: Some(debris),
+        sprite: Some(Sprite {
+            image: Some(SpriteId::Debris(sprite)),
+            color: Some(Color::rgba(1.0, 1.0, 1.0, 0.0)),
+        }),
+        ..Actor::new("debris")
+    }
+}
+
+/// `blueprints.fish`.
+pub fn fish(pos: V2, sprite: usize, fish: Fish) -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::Transform, ScriptKind::Fish, ScriptKind::Sprite],
+        transform: Some(Transform::at(pos)),
+        fish: Some(fish),
+        sprite: Some(Sprite {
+            image: Some(SpriteId::Fish(sprite)),
+            color: Some(Color::rgba(1.0, 1.0, 1.0, 0.0)),
+        }),
+        ..Actor::new("fish")
     }
 }
 
@@ -339,6 +393,17 @@ pub fn log_timer() -> Actor {
     }
 }
 
+/// The generic actor `components/particles.lua` creates to age its emitters.
+///
+/// Spawned last, so the ageing happens after every script that might have
+/// emitted this frame, and the two draw layers land on top of everything.
+pub fn particle_emitters() -> Actor {
+    Actor {
+        scripts: vec![ScriptKind::ParticleEmitters],
+        ..Actor::new("particles")
+    }
+}
+
 /// The generic actor `components/the_one_button.lua` creates to latch input in
 /// `update_setup`.
 pub fn the_one_button() -> Actor {
@@ -383,6 +448,54 @@ mod tests {
         assert_eq!(damage(laser(1, V2::ZERO, V2::I, V2::ZERO)), 10.0);
         assert_eq!(damage(bomb(1, V2::ZERO, V2::I, V2::ZERO)), 200.0);
         assert_eq!(damage(missile(1, V2::ZERO, V2::ZERO)), 40.0);
+    }
+
+    #[test]
+    fn every_ship_wears_its_owners_colours() {
+        // `scripts/ship.lua` sets this at spawn; without it a ship is invisible
+        let image = |a: Actor| a.sprite.as_ref().and_then(|s| s.image);
+        assert_eq!(
+            image(fighter(2, V2::ZERO, V2::I)),
+            Some(SpriteId::Fighter(2))
+        );
+        assert_eq!(image(bomber(3, V2::ZERO, V2::I)), Some(SpriteId::Bomber(3)));
+        assert_eq!(
+            image(frigate(4, V2::ZERO, V2::I)),
+            Some(SpriteId::Frigate(4))
+        );
+        assert_eq!(
+            image(player_factory(1, V2::ZERO, V2::I)),
+            Some(SpriteId::Factory(1))
+        );
+    }
+
+    #[test]
+    fn every_drawable_blueprint_has_an_image() {
+        // anything carrying the sprite script and no image draws nothing at all
+        let mut rng = LuaRng::new(1, 0);
+        let actors = [
+            laser(1, V2::ZERO, V2::I, V2::ZERO),
+            bomb(1, V2::ZERO, V2::I, V2::ZERO),
+            missile(1, V2::ZERO, V2::ZERO),
+            fighter(1, V2::ZERO, V2::I),
+            bomber(1, V2::ZERO, V2::I),
+            frigate(1, V2::ZERO, V2::I),
+            player_factory(1, V2::ZERO, V2::I),
+            easy_enemy_factory(&mut rng, 2, V2::ZERO, V2::I),
+            background(),
+            selection_factory(1, V2::ZERO),
+        ];
+
+        for actor in actors {
+            if !actor.has(ScriptKind::Sprite) {
+                continue;
+            }
+            assert!(
+                actor.sprite.as_ref().and_then(|s| s.image).is_some(),
+                "{} has the sprite script but no image",
+                actor.blueprint
+            );
+        }
     }
 
     #[test]

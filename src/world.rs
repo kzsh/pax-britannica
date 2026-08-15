@@ -105,6 +105,8 @@ pub struct Actor {
     pub countdown: Option<crate::scripts::countdown::Countdown>,
     pub selector: Option<crate::scripts::selector::Selector>,
     pub fade: Option<crate::scripts::fade::Fade>,
+    pub debris: Option<crate::scripts::debris::Debris>,
+    pub fish: Option<crate::scripts::fish::Fish>,
 
     #[cfg(test)]
     pub probe: Option<crate::scripts::probe::Probe>,

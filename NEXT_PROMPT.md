@@ -4,83 +4,78 @@ Paste everything below the line as the opening message.
 
 ---
 
-Continue the Lua → Rust port of Pax Britannica. **Read `PORTING.md` first, end to
-end** — it is the source of truth for the plan, the architecture, the phase
-status and the list of deliberately-copied quirks. This prompt only covers what
-that document does not: how to work on it, and where the traps are.
+Continue the Lua → Rust port of Pax Britannica. Read `PORTING.md` first — start
+with the "Goal — changed" section, which supersedes anything later in that
+document that still smells of frame-perfect parity.
+
+## The short version
+
+The bit-exact differential-trace goal is dead. The target is a playable Rust Pax
+Britannica whose mechanics match the original: same units, same costs, same AI
+behaviour, same one-button dial, same feel. Port by reading the Lua and
+transliterating it; do not chase digits.
 
 ## Where things stand
 
-Phases 0–2 done, phase 3 at 4 of 6 clusters. Cluster 4 (`resources`,
-`production`, both producers, `factory_ai`, `factory_damage`,
-`components/the_one_button.lua`) landed last session. 146 tests pass, `cargo fmt
---check` and clippy are clean.
+Phases 0–3 are done: all of the game logic is in Rust, 187 tests pass, fmt and
+clippy are clean. `cargo run --release --bin headless -- 60000` plays a full
+game with scripted input and restarts six times, so the mechanics work end to
+end.
 
-**Your task is cluster 5: `game_flow`, `countdown`, `selector`, `splash`,
-`fade` — the scene state machine.** After that, cluster 6 is cosmetics
-(`debris`, `fish`, `background_fx`), and then the thing everything has been
-building towards: `src/bin/trace.rs`, and the first comparison against
-`traces/golden.txt`. Do not skip ahead to the trace runner — until the game can
-start, there is no run to trace.
+Phase 4 — `src/render.rs` and `src/bin/pax.rs`, on macroquad — is **written and
+has never been run**. The session that wrote it had no display and no libGL, so
+it is compiler-checked and nothing more.
 
-Everything from phases 1–3 is **uncommitted working tree**. Only phase 0 is
-committed. Do not `git checkout`, `git stash`, or otherwise write with git; treat
-`git status`/`git diff` as read-only context. Another agent or the user may have
-committed in the meantime.
+Everything except phase 0 is **uncommitted working tree**. Treat `git status` and
+`git diff` as read-only context; do not `git checkout`, `git stash`, or otherwise
+write with git.
+
+## Your task
+
+1. **Run it.** `cargo run --release --bin pax`. Press `A` (or `F`, `H`, `L`) to
+   join, wait out the countdown, hold the button to build.
+2. **Fix what is wrong on screen.** PORTING.md's "next concrete step" section
+   lists the four most likely failures in order — vertical flip, pie-slice
+   winding, the health bar's manual texture wrap, blending. Compare against the
+   original if it still builds, or against `screenshot_*.png` in the repo root.
+3. Then, if the game looks right: gamepads (needs `gilrs` — ask before adding),
+   and phase 5, deleting the Lua and C trees.
 
 ## Environment
 
-- Rust lives at `~/.cargo/bin`, not on `PATH`. `export PATH="$HOME/.cargo/bin:$PATH"` first, or let direnv run `.envrc`.
-- `just` is **not installed**. The `justfile` recipes are correct but unverified; run the commands directly.
-- `lua5.4` is on `PATH` and is the oracle. Use it.
-- `python3` is broken in this sandbox (no stdlib). Use Lua, shell, or Rust for scratch work.
+- Rust lives at `~/.cargo/bin`, not on `PATH`: `export PATH="$HOME/.cargo/bin:$PATH"`, or let direnv run `.envrc`.
+- `just` may not be installed. The `justfile` recipes are correct but unverified; run the commands directly.
+- `lua5.4` was on `PATH` in earlier sessions and is not any more. If you want the original as a reference, install it; `test/headless.lua` and `test/trace.lua` still work.
 
 ```bash
+cargo run --release --bin pax
+cargo run --release --bin headless -- 12000
 cargo test
 cargo clippy --all --benches --tests --examples --all-features
-lua5.4 test/headless.lua 1200                 # smoke test
-lua5.4 test/trace.lua 12000 --out /dev/null --dump 500:505   # full state, frame range
 ```
 
-## How to work on this
+## Still worth knowing
 
-The port's whole value is bit-exact parity with the Lua. Four rules, each of
-which has already caught a real bug:
+Behaviour, not parity, so these still apply:
 
-1. **Measure against the interpreter; do not derive.** When a ported script's
-   numbers or draw counts are non-obvious, get them out of `lua5.4` and paste
-   them into the test as literals. See
-   `easy_enemy_production::tests::creation_matches_the_lua_interpreter_bit_for_bit`
-   for the pattern, and `test/particle_draws.lua` for the generator form.
-2. **Mutation-test the subtle assertions.** Deliberately break the thing the
-   test claims to pin and confirm the test fails, then restore. A subtlety
-   spotted while reading is a hypothesis. Phase 1 found two of three "load-
-   bearing" quirks were unreachable this way.
-3. **Count RNG draws, and read `draw` methods as carefully as `update`.** The
-   shared `math.random` stream is gameplay state; getting the *number* of draws
-   wrong desynchronises everything downstream, and it shows up in the trace a
-   frame or two later rather than immediately. Cluster 4 found two draw-phase
-   traps — see the note in PORTING.md's phase 3 section. Watch for Lua's `or`
-   and `and` short-circuiting, which makes draws conditional.
-4. **Chunk-level `local`s are per-instance state, not scratch.** `test/trace.lua`
-   walks script upvalues precisely because several scripts keep their real state
-   there — `local state = 'init'` in `scripts/game_flow.lua` *is* the scene state
-   machine, and it is in the golden trace. Anything mutated in a `draw` counts
-   too.
+- **Iteration order is spawn order**, and draw order is z-order. `src/world.rs`
+  gets this right; don't refactor it into an unordered ECS. The renderer walks
+  the same order for the same reason.
+- **Deletion is deferred to end of update; everything else is immediate.**
+- **`production::draw` and `factory_damage::draw` are gameplay, not pixels** —
+  they carry state and take a random draw. They run in `the_game::step`; the
+  renderer only reads what they leave behind. Keep that split or `headless`
+  stops being a faithful driver.
+- Lua's `%` is floor modulo and `//` is floor division; `rem_euclid` exists.
+- `f64` everywhere in gameplay maths, not `f32`. The renderer casts to `f32` at
+  the boundary and nowhere earlier.
+- The deliberate original quirks listed at the end of PORTING.md's phase 3
+  section are gameplay, not bugs. Leave them alone.
 
-## Specific to cluster 5
+## Definition of done
 
-- `scripts/game_flow.lua` and `the_game.lua`'s init together decide **actor spawn order**, which is iteration order and therefore z-order and AI targeting order. Get the order of `game.init_component` and the first `game.actors.new` calls literally right.
-- The scene machine works through **callbacks** (`fade` calls back on completion, `selector` calls the countdown's reset, the countdown calls `start_game`). Rust has no closures-over-scene-state to lean on here; a small explicit enum of pending actions is likely to translate more honestly than boxed callbacks. Decide deliberately and write down why.
-- **Restarting builds a whole new game object.** `kernel.switch_scene(the_game.make())` — the world, the components and the log are all replaced, and the RNG is *not* reseeded (`test/harness.lua` neuters `math.randomseed`). The golden trace covers one scene switch, so this path is exercised.
-- `test/harness.lua` is the authority on the input schedule the trace was made with. `src/the_one_button.rs` already has `held`/`pressed`/`released`; the driver writes `keys` and the `update_setup` phase latches.
+`cargo fmt`, clippy clean, `cargo test`. Update `PORTING.md`'s status table and
+next-step section. Keep it honest — it is the handoff.
 
-## Definition of done for the cluster
-
-- Every ported script has tests, including a draw-count assertion where any RNG is involved.
-- `cargo fmt`, then clippy clean, then `cargo test`.
-- `PORTING.md` updated: the status table, the cluster list, the next concrete step, the file map, and any new quirk worth pinning. Keep it honest — it is the handoff.
-
-Follow the house style in `~/.claude/CLAUDE.md`: no `unwrap`/panic outside tests,
-`crate::` over `super::`, no breadcrumb comments, no new dependencies without
-asking.
+House style: no `unwrap`/panic outside tests, `crate::` over `super::`, no
+breadcrumb comments, no new dependencies without asking.

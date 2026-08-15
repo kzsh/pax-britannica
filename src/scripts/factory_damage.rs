@@ -13,10 +13,20 @@
 use crate::game::Game;
 use crate::world::ActorId;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FactoryDamage {
     /// Frames since the factory was built; `time/4 % 3` picks the art.
     pub time: i64,
+    /// The opacity the scorch marks were last drawn at. Written by the draw,
+    /// read by the renderer.
+    pub flicker: f64,
+}
+
+impl FactoryDamage {
+    /// Which of the three frames of damage art is showing.
+    pub fn frame(&self) -> usize {
+        (self.time / 4).rem_euclid(3) as usize + 1
+    }
 }
 
 pub fn update(game: &mut Game, id: ActorId) {
@@ -28,10 +38,26 @@ pub fn update(game: &mut Game, id: ActorId) {
         .time += 1;
 }
 
-/// Takes the flicker's draw. The colour it computes is renderer work for phase
-/// 4; the draw itself is gameplay, because the stream is shared.
-pub fn draw(game: &mut Game, _id: ActorId) {
-    game.rng.next_f64();
+/// Takes the flicker's draw and records the opacity it produces.
+///
+/// The draw is the part that is gameplay, because the stream is shared; the
+/// opacity is what the renderer paints the scorch marks with.
+pub fn draw(game: &mut Game, id: ActorId) {
+    let alpha = game
+        .world
+        .get(id)
+        .sprite
+        .as_ref()
+        .and_then(|sprite| sprite.color.map(|color| color.a))
+        .unwrap_or(1.0);
+    let flicker = alpha * game.rng.next_f64();
+
+    game.world
+        .get_mut(id)
+        .factory_damage
+        .as_mut()
+        .expect("factory_damage script")
+        .flicker = flicker;
 }
 
 #[cfg(test)]
@@ -70,5 +96,19 @@ mod tests {
         }
 
         assert_eq!(game.world.get(id).factory_damage.unwrap().time, 7);
+    }
+
+    #[test]
+    fn the_art_cycles_every_four_frames_over_three_frames() {
+        let mut damage = FactoryDamage::default();
+        let frames: Vec<usize> = (0..13)
+            .map(|_| {
+                let frame = damage.frame();
+                damage.time += 1;
+                frame
+            })
+            .collect();
+
+        assert_eq!(frames, [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 1]);
     }
 }

@@ -1,27 +1,60 @@
 # Pax Britannica → Rust port plan
 
+## Goal — changed: mechanics, not frame parity
+
+This port originally aimed at bit-exact, frame-for-frame reproduction of the Lua
+run, gated on a per-frame differential trace. **That goal is abandoned.** The
+remaining work is judged by whether the game plays like Pax Britannica, not by
+whether frame 8,431 hashes the same.
+
+What that means in practice:
+
+- **`src/bin/trace.rs` will not be written**, and nothing will be diffed against
+  `traces/golden.txt`. The trace, `test/trace.lua` and the harness stay in the
+  repo as a debugging tool for when behaviour looks wrong, and as the record of
+  how the ported scripts were derived. They are no longer a gate.
+- **Port by reading the Lua, not by measuring the interpreter.** Transliterate
+  the script, write a test that the behaviour is sane, move on. Do not go
+  hunting for exact RNG draw counts in new code.
+- **RNG draw counts are no longer load-bearing.** They were only ever load-bearing
+  because of the trace. Cosmetic effects can consume the stream however is
+  convenient.
+- **Existing tests stay.** The ~177 tests already written encode real behaviour
+  and cost nothing to keep green. Do not spend effort widening or deleting them,
+  but if one starts failing over a digit rather than over behaviour, relax it.
+- **The bar for new work is: does it run, is it readable, does it feel right.**
+
+The fastest route to something playable is what matters now: finish the three
+cosmetic scripts, then build the macroquad platform layer (phase 4) and look at
+it.
+
 ## Where things stand
 
-Phases 0, 1 and 2 are done. Phase 3 is five-sixths done: clusters 1–5 of 6.
+Phases 0–3 are done. Phase 4 is written but **has never been run**: this sandbox
+has no display and no libGL, so `src/bin/pax.rs` compiles and nothing more. The
+first thing the next session (or the user) should do is run it on a machine with
+a screen.
 
-**177 tests pass, `cargo fmt --check` and `cargo clippy --all --benches --tests --examples --all-features` are clean.**
+**187 tests pass, `cargo fmt --check` and `cargo clippy --all --benches --tests --examples --all-features` are clean.**
 
 Phase 0 is committed (`438796e Commit phase 0`: `Cargo.toml`, `src/rng.rs`, `src/lib.rs`, the `test/` harness and `traces/golden.txt`). **Everything from phases 1–3 is uncommitted working tree** — all of `src/scripts/`, `src/v2.rs`, `src/collision.rs`, `src/world.rs`, `src/game.rs`, `src/blueprints.rs`, `src/particles.rs`, `src/log.rs`, `src/targeting.rs`, `src/resources.rs`, `src/constants.rs`, `src/the_game.rs`, `tests/`, `traces/collision.txt`, and the two newer generator scripts in `test/`.
 
 | Area | State |
 | --- | --- |
-| Golden trace oracle | Done. `traces/golden.txt`, 12,000 frames, reproducible |
+| Golden trace oracle | Exists (`traces/golden.txt`, 12,000 frames). Debugging aid only |
 | `rng`, `v2`, `collision` | Done, differentially tested against Lua |
 | `world` (actor model, phases) | Done, mutation-tested |
 | `ship`, `bullet`, `targeting`, `log`, `particles`, collision resolution | Done |
 | Fighter / bomber / frigate AI + shooting, `heatseeking_ai`, `blueprints` | Done |
 | `resources`, `production`, `factory_ai`, `factory_damage`, both producers | Done, checked against the interpreter |
 | `game_flow`, `countdown`, `selector`, `splash`, `fade`, scene switching | Done, checked against the interpreter |
-| `debris`, `fish`, `background_fx` | **Not started** |
-| Rust headless runner + trace writer | **Not started** — nothing has been compared to the oracle yet |
-| Phase 4 (macroquad platform) | Not started |
+| `debris`, `fish`, `background_fx` | Done |
+| Rust headless runner (`src/bin/headless.rs`) | Done. 12,000 frames gets a restart, every unit and projectile seen |
+| Rust trace writer | **Dropped.** Parity gate abandoned; see the goal section |
+| Phase 4 (macroquad platform) | Written, **unrun**. Renderer, window, fixed-timestep loop, keyboard, music |
+| Gamepads | Not done. macroquad has no gamepad API; would need a new dependency |
 
-There is **no Rust binary yet**; the crate is a library plus tests. `cargo test` is the only thing to run. Rust lives at `~/.cargo/bin` and is not on `PATH`. The game does now run end to end in Rust: `the_game::make` builds a scene and `the_game::step` is one frame of the kernel loop, so a driver is a `for` loop over `step` that writes `game.the_one_button.keys` first.
+Two binaries: `pax` (the game, macroquad) and `headless` (the same game with no window, a scripted input schedule and a summary). `the_game::make` builds a scene, `the_game::step` is one frame of the kernel loop and returns whether the scene was replaced, so a driver is a `for` loop over `step` that writes `game.the_one_button.keys` first. Rust lives at `~/.cargo/bin` and is not on `PATH`.
 
 ### Environment
 
@@ -31,7 +64,9 @@ There is **no Rust binary yet**; the crate is a library plus tests. `cargo test`
 ### Commands
 
 ```bash
-cargo test                                    # 177 tests
+cargo run --release --bin pax                 # the game (needs a display)
+cargo run --release --bin headless 12000      # the game, no window, with a summary
+cargo test                                    # 187 tests
 cargo clippy --all --benches --tests --examples --all-features
 lua5.4 test/headless.lua 12000                # Lua smoke test
 lua5.4 test/trace.lua 12000 --out traces/golden.txt          # regenerate oracle (~100s)
@@ -41,11 +76,50 @@ lua5.4 test/particle_draws.lua                # RNG draw counts per particle eff
 
 ### The next concrete step
 
-Port cluster 6, the cosmetics: `background_fx`, `debris`, `fish`. Small, but neither optional nor deferrable to phase 4 — `scripts/background_fx.lua` takes **two draws every single frame** for its two `math.random() < ...` tests, plus a handful more each time one of them passes, and it runs from frame 1 of every scene. Measure the per-spawn count against the interpreter rather than counting the calls by eye.
+**Run `cargo run --release --bin pax` on a machine with a display and look at
+it.** Everything below is a guess until someone does. The things most likely to
+be wrong, in order:
 
-Its actor belongs in `the_game::make` between `background` and `game_flow`, and `the_game::tests::the_scene_is_built_in_the_order_the_interpreter_builds_it` is the list to add it to.
+1. ~~**Vertical flip.**~~ Found on the first run: the whole scene was upside
+   down. `Camera2D::matrix` negates `zoom.y` whenever the camera targets the
+   screen instead of a render target (macroquad 0.4.16, `src/camera.rs:96`), so
+   `zoom.y` has to be *negative* to end up y-up as `glOrtho(0, 1024, 0, 768)`
+   is. Per-sprite `flip_y: true` is unrelated and still correct: a texture's top
+   row is its first row whichever way the world runs.
+2. ~~**Nothing but particles and background art drew.**~~ `scripts/ship.lua`'s
+   chunk body sets `self.sprite.image` from `sprites_table[player]` at spawn; the
+   port carried the `ShipSprites` enum but never wrote it through, so every
+   fighter, bomber, frigate and factory had `image: None`. Nothing read
+   `sprite.image` until the renderer existed, which is how it survived phase 3.
+   Now done in `blueprints::ship_sprite`, with a test that no blueprint carries
+   the sprite script without an image.
+3. ~~**The letterbox.**~~ Done in the projection rather than with
+   `Camera2D::viewport`, which is in framebuffer pixels while `screen_width` is
+   in logical points -- they disagree on a HiDPI display. The world now fills
+   whichever axis binds and keeps its 4:3.
+4. ~~**Explosions froze and lingered.**~~ `components/particles.lua`'s generic
+   actor ages every emitter once a frame; the port spawned that actor with no
+   scripts on it, so `Particles::update` was never called -- life never
+   decremented, velocity never applied, scale never grew, and a particle only
+   vanished when the 2,000-slot ring wrapped over it. Ageing consumes no random
+   draws, which is exactly why nothing in phase 3 noticed. Now
+   `ScriptKind::ParticleEmitters`, spawned last as the Lua does.
+5. **Pie-slice winding and start angle.** The dial's dark slice, the spent-
+   resources highlight and the selector's quadrant are triangle fans rebuilt from
+   `GL_TRIANGLE_FAN` loops. The angles are transliterated but the Lua mixes
+   `v2.unit(pi/2 - ...)` with a raw `(sin, cos)` pair, which is the same rotation
+   written two different ways — easy to get a quarter turn out.
+6. **The health bar's scroll.** The Lua repeats the texture and slides the
+   texture matrix; macroquad has no wrap mode to set, so `draw_scrolled` splits
+   the quad in two at the wrap point instead.
+7. **Blending.** The original sets `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` plus
+   an alpha test that discards fully transparent fragments; macroquad's default
+   is the same blend without the alpha test.
 
-Then build `src/bin/trace.rs`: mirror `test/harness.lua`'s input schedule exactly (keys `A`/`F`/`H`/`L`, players 1 and 2 join on frames 2–3, then `frame % (120 * i * i)` hold patterns), emit the same one-line-per-frame format as `test/trace.lua`, and diff against `traces/golden.txt`. Expect the first comparison to diverge early; that is the tool working.
+After that: gamepads, if they are wanted. macroquad 0.4 has no gamepad API, so
+that means a dependency (`gilrs` is the obvious one) — ask first.
+
+Then phase 5, the cut-over: delete the Lua and the C.
 
 ## What's actually here
 
@@ -97,7 +171,7 @@ struct Actor {
 }
 ```
 
-Yes, 25 `Option` fields is unfashionable. It is also a direct, checkable translation of the Lua table, it preserves spawn order for free, and it makes `actor.ship.velocity` a field access instead of an ECS query dance. Once the headless differential test is green, refactoring to `hecs` (with an explicit ordered `Vec<Entity>` per phase) is a mechanical follow-up you can do with confidence — or skip, because at ~200 actors the flat arena is already faster than the Lua original by a wide margin.
+Yes, 25 `Option` fields is unfashionable. It is also a direct, checkable translation of the Lua table, it preserves spawn order for free, and it makes `actor.ship.velocity` a field access instead of an ECS query dance. Refactoring to `hecs` (with an explicit ordered `Vec<Entity>` per phase) is a mechanical follow-up you can do with confidence — or skip, because at ~200 actors the flat arena is already faster than the Lua original by a wide margin.
 
 - dokidoki **components** (`resources`, `targeting`, `constants`, `log`, `the_one_button`, …) → fields on a `Game` struct passed as `&mut` alongside the world. No globals, no `lazy_static`.
 - **Update/draw phases** (`update_setup`, `update`, `collision_registry`, `collision_check`, `update_cleanup`; `draw_setup`, `draw`, `draw_foreground`, `fade_draw`) → an explicit ordered list of system fns. This is the schedule; keep it literal and readable.
@@ -150,7 +224,7 @@ Requires porting Lua 5.4's `math.random` bit-exactly — it's xoshiro256\*\* plu
 
 **Mutation-checked, with a surprise.** Of the three quirks flagged as "load-bearing" while reading the C, only one actually is: normalising the separating axis fails the differential test on case 8. The `halfwidth_along_axis` floor at `0` and the zero-correction-means-separated guard are both *unreachable* for these shapes — every polygon is built around its own centroid and so contains the origin, and no edge is degenerate. Both are kept for fidelity, and the doc comment now says which is which. Worth remembering the general lesson for phase 3: a subtlety spotted while reading is a hypothesis, and mutation is how you find out.
 
-### Risk to settle before phase 3: transcendental functions
+### ~~Risk to settle before phase 3: transcendental functions~~ — moot
 
 Gameplay calls `sin`, `cos`, `atan2` and `sqrt` constantly. `sqrt` is IEEE-exact and safe. The other three are **not** guaranteed to agree bit-for-bit between implementations. On this machine both Lua and Rust call glibc's libm, so they should match — but that is a property of the box, not of the port, and it means the golden trace is only portable across machines to the extent libm is. If phase 3 shows drift that tracks trig usage, the fix is to pin both sides to one implementation (e.g. the `libm` crate) rather than to loosen the comparison.
 
@@ -168,14 +242,14 @@ Dead actors keep their data forever and `ActorId` is never reused, because the L
 
 **Design decision:** the owning `player` is hoisted onto `Actor` rather than living on the `ship`/`bullet` scripts as it does in Lua, which removes the `self.ship and self.ship.player or self.bullet.player` fallback. Every collidable has exactly one.
 
-### Phase 3 — Game logic, script by script — **IN PROGRESS (5 of 6 clusters)**
+### Phase 3 — Game logic, script by script — **DONE**
 
 1. ~~`transform`, `sprite` (data only), `collision` + `targeting`~~ **done**
 2. ~~`ship`, `bullet`, `heatseeking_ai`, `particles`, `log`, collision resolution~~ **done**
 3. ~~`fighter_*`, `bomber_*`, `frigate_*` AI and shooting, `blueprints`~~ **done**
 4. ~~`resources`, `production`, `player_production`, `easy_enemy_production`, `factory_ai`, `factory_damage`~~ **done**
 5. ~~`game_flow`, `countdown`, `selector`, `splash`, `fade` — the scene state machine, plus `the_game.lua` itself~~ **done**
-6. Cosmetics: `debris`, `fish`, `background_fx` — **next**
+6. ~~Cosmetics: `debris`, `fish`, `background_fx`~~ **done**
 
 #### Cluster 5: the scene machine
 
@@ -261,17 +335,29 @@ Polling is split from latching — the driver writes `keys`, and the
 `update_setup` phase latches it — so the component needs no window. Cluster 5's
 `selector` wants `pressed`, which is already there.
 
-**Validation:** the Rust headless trace matches `traces/golden.txt` frame for frame. This is the gate for the whole project — treat a divergence at frame N as a bug to be localised, not a tolerance to be widened.
+**Validation, as originally planned:** the Rust headless trace matches
+`traces/golden.txt` frame for frame. **This gate is dropped** — see the goal
+section at the top. Clusters 1–5 were built to it and keep their tests; cluster 6
+and phase 4 are not held to it.
 
-Expect the state machine in `scripts/game_flow.lua` and the radial-menu maths in `scripts/production.lua` (210 lines, the densest file) to be where the divergences cluster.
+#### Techniques that earned their keep (while parity was the goal)
 
-#### Techniques that have earned their keep
+Kept for context, because they explain the shape of the existing tests. None of
+them is required of new code any more.
 
-**Measure draw counts against the interpreter, don't derive them.** `test/particle_draws.lua` loads the real `components/particles.lua` under a counting RNG and prints the exact number of draws per effect (`explode_big` = 1280, `_mid` = 380, `_small` = 150, `_tiny` = 68, `laser_hit` = 20, `add_bubble` = 2). Those measured numbers are the assertions in `src/particles.rs`. Do the same for anything else whose draw count is non-obvious.
+**Draw counts were measured, not derived.** `test/particle_draws.lua` prints the
+exact draws per effect (`explode_big` = 1280, `_mid` = 380, `_small` = 150,
+`_tiny` = 68, `laser_hit` = 20, `add_bubble` = 2); those numbers are the
+assertions in `src/particles.rs`.
 
-**Lua's `or` short-circuits, so RNG draws are conditional.** Every AI has a line like `if not target or target.dead or math.random() < 0.005 then`. The draw only happens when the earlier tests fail. Each ported AI has a test asserting its exact per-update draw count — fighter with no target: 0; with a live target: 1; frigate acquiring a target: 2 (the fuzz offset). This is the single easiest way to desynchronise the whole run.
+**Lua's `or` short-circuits, so RNG draws are conditional.** Every AI has a line
+like `if not target or target.dead or math.random() < 0.005 then`. Still worth
+knowing when reading the Lua — it changes *behaviour*, not just draw counts, when
+you get the branch structure wrong.
 
-**Mutate to check a test can fail.** Phase 1 found that two of three "load-bearing" quirks were unreachable. A subtlety spotted while reading is a hypothesis.
+**Mutate to check a test can fail.** Phase 1 found that two of three
+"load-bearing" quirks were unreachable. A subtlety spotted while reading is a
+hypothesis. Cheap, and still the right instinct for anything genuinely subtle.
 
 #### Original quirks copied deliberately (do not "fix")
 
@@ -284,21 +370,46 @@ Expect the state machine in `scripts/game_flow.lua` and the radial-menu maths in
 - `scripts/production.lua`'s four debug-key spawns are **not ported**: `components/debug_keys.lua` gates them on a `--debug` flag nothing passes, so they are dead in every build, including the traced one.
 - **`components/targeting.lua` never checks `dead`, and the tag index is only culled at end of update.** So on the frame a target dies, the AI retargets onto the same corpse and only picks a live enemy the frame after. Pinned by `a_fighter_retargets_onto_a_corpse_for_one_frame_then_moves_on`. Expect this to look like a bug when a divergence lands near a kill.
 
-### Phase 4 — Platform
+### Phase 4 — Platform — **WRITTEN, UNRUN**
 
-Window, letterboxed 4:3 viewport, sprite/quad renderer, text (`default_font.lua` is an embedded bitmap font), keyboard + gamepad input, Ogg music. Port `particles.c` — it's a flat SoA particle buffer already, so it maps to a `Vec<Particle>` plus one batched draw call, and it should end up *simpler* than the C.
+`src/render.rs` and `src/bin/pax.rs`, on macroquad 0.4.
 
-Keep the fixed-60Hz accumulator with `max_frameskip = 6` from `dokidoki/kernel.lua:268-291`. The game's physics constants assume a 1/60 tick; do not switch to variable dt.
+- **Coordinates.** A `Camera2D` reproducing `glOrtho(0, 1024, 0, 768)`, with a
+  4:3 letterbox viewport computed from the window size each frame.
+- **Transforms.** `quad_gl.push_model_matrix`/`pop_model_matrix` is a direct
+  stand-in for `glPushMatrix`/`glPopMatrix`, so each script's draw is a
+  transliteration of the Lua's rather than a rewrite in terms of macroquad's
+  per-call `rotation`/`pivot`.
+- **The renderer is read-only.** The two draw methods that are gameplay --
+  `production::draw` (needle and scroller state) and `factory_damage::draw` (one
+  random draw) -- still run inside `the_game::step`. `factory_damage` now records
+  the flicker opacity it rolled so the renderer can paint with it instead of
+  rolling its own. This split is what keeps `headless` possible.
+- **Sprite metadata** (path, origin, filtering) lives on `SpriteId::meta()` in
+  `src/resources.rs`, next to the names, and is checked by a test that every
+  path exists and no two sprites share one.
+- **Loop.** Fixed 60Hz accumulator with `max_frameskip = 6`, from
+  `dokidoki/kernel.lua:268-291`. Unlike the original, a frame that catches up by
+  several ticks runs the state-carrying draws once per tick rather than once per
+  rendered frame. Under the parity goal that would have been a defect; it is a
+  deliberate simplification now.
+- **Not ported:** the power-of-two texture padding (a 1998 constraint), the
+  loading-screen actor and `scripts/load_music.lua` (the binary loads the Ogg up
+  front), `components/{debug_keys,tracing,fast_forward}.lua`, and
+  `dokidoki/default_font.lua` — nothing in the shipped game draws text.
+- **Gamepads are not wired up.** `components/the_one_button.lua` polls four
+  joysticks; macroquad 0.4 exposes no gamepad API, so `pax` is keyboard-only
+  (`A`, `F`, `H`, `L`). Adding them means adding `gilrs`.
 
-**Validation:** play it. Side-by-side screenshots against the Lua build at matched frame counts.
+**Validation:** play it. Side-by-side against the Lua build by eye is plenty.
 
 ### Phase 5 — Cut over
 
-Delete `dokidoki/`, `dokidoki-support/`, `*.c`, `Makefile`, `compiling.txt`, `extra_loaders.h`. Keep `sprites/`, `audio/`, `media/`, `license.txt`, and the third-party notices for anything still vendored (probably nothing). Rewrite `README.md` build instructions. Add a `justfile`. Keep the headless differential runner as a permanent regression test.
+Delete `dokidoki/`, `dokidoki-support/`, `*.c`, `Makefile`, `compiling.txt`, `extra_loaders.h`. Keep `sprites/`, `audio/`, `media/`, `license.txt`, and the third-party notices for anything still vendored (probably nothing). Rewrite `README.md` build instructions. The Lua tree and `test/` harness can stay until the Rust version is clearly better; they are the only reference for anything that turns out wrong.
 
 ## Risks, in order of how much they'll cost you
 
-1. **Silent gameplay divergence** — mitigated entirely by phase 0. If you skip phase 0 to move faster, this becomes the project.
+1. ~~**Silent gameplay divergence**~~ — accepted. The port is allowed to differ as long as it plays right.
 2. **Float determinism** — Lua uses f64 throughout; use `f64` in Rust, not `f32`, in all gameplay maths. Watch for `x^0.5` vs `sqrt`, and for Lua's `//` (floor div) and `%` (floor mod, *not* Rust's truncating `%`). This one bites reliably.
 3. **Order-of-iteration** — covered above; the flat arena makes it a non-issue by construction.
 4. **Borrow checker vs. mutual ship interaction** — real friction in phase 3.2, solved with indices. Budget for one refactor here.
@@ -306,7 +417,8 @@ Delete `dokidoki/`, `dokidoki-support/`, `*.c`, `Makefile`, `compiling.txt`, `ex
 
 ## Rough sizing
 
-Phases 0–2 are a few days. Phase 3 is the bulk — 1,600 lines of dense, untyped, mutually-referential Lua, and every line needs its implicit types recovered. Phase 4 is a day or two on macroquad. Call it 2–4 weeks of focused work, and the single biggest lever on that number is whether phase 0 exists.
+What is left: 76 lines of cosmetic Lua, then the macroquad platform layer. The
+platform layer is the only substantial piece remaining.
 
 ## File map
 
@@ -343,6 +455,12 @@ Lua source on the left, its Rust counterpart on the right. Absent means not yet 
 | `scripts/selector.lua` | `src/scripts/selector.rs` |
 | `scripts/fade.lua` | `src/scripts/fade.rs` (the black quad is phase 4) |
 | `scripts/splash.lua` | `src/scripts/splash.rs` (positions only; phase 4 draws it) |
+| `scripts/background_fx.lua` | `src/scripts/background_fx.rs` |
+| `scripts/debris.lua` | `src/scripts/debris.rs` |
+| `scripts/fish.lua` | `src/scripts/fish.rs` |
+| `dokidoki/graphics.lua`, `dokidoki/components/opengl_2d.lua`, every script's `draw` | `src/render.rs` |
+| `dokidoki/kernel.lua`'s main loop, `init.lua`, `components/the_one_button.lua`'s polling | `src/bin/pax.rs` |
+| `test/headless.lua` | `src/bin/headless.rs` |
 | `dokidoki/base.lua` | none needed — Rust iterators |
 | `dokidoki/kernel.lua`, `graphics.lua`, `default_font.lua` | phase 4 |
 

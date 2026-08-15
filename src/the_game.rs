@@ -46,8 +46,9 @@ pub fn make(rng: LuaRng) -> Game {
     game.world.spawn(blueprints::the_one_button());
 
     game.world.spawn(blueprints::background());
+    game.world.spawn(blueprints::background_fx());
     game.world.spawn(blueprints::game_flow());
-    generic(&mut game, "particles");
+    game.world.spawn(blueprints::particle_emitters());
 
     game
 }
@@ -60,13 +61,17 @@ pub fn make(rng: LuaRng) -> Game {
 /// the old one still finishes its update and its draw. Sixty stacked game-over
 /// fades all call it; only the first has any effect, because replacing the game
 /// takes the rest with it.
-pub fn step(game: &mut Game) {
+/// Returns whether this frame ended with the scene being replaced.
+pub fn step(game: &mut Game) -> bool {
     world::update(game);
     world::draw(game);
 
     if game.scene_switch_requested {
         *game = make(game.rng.clone());
+        return true;
     }
+
+    false
 }
 
 #[cfg(test)]
@@ -110,9 +115,7 @@ mod tests {
 
     #[test]
     fn the_scene_is_built_in_the_order_the_interpreter_builds_it() {
-        // from `lua5.4` with the harness recording every game.actors.new call.
-        // The background effects are cluster 6 and slot in between
-        // `background` and `game_flow`.
+        // from `lua5.4` with the harness recording every game.actors.new call
         let game = make(LuaRng::new(1, 0));
         assert_eq!(
             blueprints_in_order(&game),
@@ -126,9 +129,31 @@ mod tests {
                 "fast_forward",
                 "the_one_button",
                 "background",
+                "background_fx",
                 "game_flow",
                 "particles",
             ]
+        );
+    }
+
+    #[test]
+    fn particles_are_aged_once_a_frame() {
+        // `components/particles.lua`'s actor does this; without it a particle
+        // never moves, never grows and never dies, it just sits there until the
+        // ring buffer wraps over it
+        let mut game = make(LuaRng::new(1, 0));
+        game.particles
+            .explode_small(&mut game.rng.clone(), V2::ZERO);
+        let before = game.particles.live_count();
+        assert!(before > 0);
+
+        for _ in 0..11 {
+            step(&mut game);
+        }
+
+        assert!(
+            game.particles.live_count() < before,
+            "the explosion emitters live 10 frames, so they should be gone"
         );
     }
 

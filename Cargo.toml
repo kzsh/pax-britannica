@@ -6,3 +6,4 @@ license = "MIT"
 description = "One-button real-time strategy"
 
 [dependencies]
+macroquad = "0.4.16"

@@ -80,6 +80,12 @@ impl Emitter {
     pub fn particles(&self) -> impl Iterator<Item = &Particle> {
         self.particles.iter().filter(|p| p.life > 0)
     }
+
+    /// How much life a particle has left, as a fraction of a full one. The
+    /// opacity `particles.c` draws it at.
+    pub fn life_fraction(&self, particle: &Particle) -> f64 {
+        particle.life as f64 / self.life as f64
+    }
 }
 
 /// The shape of one explosion, which is all that differs between
@@ -133,6 +139,21 @@ impl Particles {
             small_explosion: Emitter::new(EXPLOSION.0 / 96.0, EXPLOSION.1 / 96.0, 10, 1.0, 10.0),
             spark: Emitter::new(SPARK.0 * 1.75, SPARK.1 * 1.75, 40, 0.95, 0.0),
         }
+    }
+
+    /// Live particles across every emitter.
+    pub fn live_count(&self) -> usize {
+        [
+            &self.bubble,
+            &self.big_bubble,
+            &self.big_explosion,
+            &self.mid_explosion,
+            &self.small_explosion,
+            &self.spark,
+        ]
+        .iter()
+        .map(|emitter| emitter.live_count())
+        .sum()
     }
 
     pub fn update(&mut self) {

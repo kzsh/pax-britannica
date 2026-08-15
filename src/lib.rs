@@ -10,6 +10,7 @@ pub mod constants;
 pub mod game;
 pub mod log;
 pub mod particles;
+pub mod render;
 pub mod resources;
 pub mod rng;
 pub mod scripts;
