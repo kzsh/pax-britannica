@@ -18,6 +18,7 @@ local damage_received =
 local accuracy_hits = {fighter=0, bomber=0, frigate=0}
 local accuracy_misses = {fighter=0, bomber=0, frigate=0}
 local frame_count = 0
+local ai_used = nil
 
 local function identify_bullet(bullet)
   if bullet.blueprint.name == 'laser' then
@@ -66,10 +67,19 @@ function record_time()
   frame_count = frame_count + 1
 end
 
+function record_ai(name)
+  ai_used = name
+end
+
+function get_ai()
+  return ai_used
+end
+
 function print_stats()
   print('=====================================')
   print('==         GAME STATISTICS         ==')
   print('=====================================')
+  print('AI:')              print("", ai_used and string.upper(ai_used) or "NONE (versus)")
   print('Time Elapsed:')    print("", string.format("%.3f seconds", frame_count / 60))
   print('Constructed:')     for k,v in pairs(spawn) do print('',string.upper(k),v) end
   print('Destroyed:')       for k,v in pairs(death) do print('',string.upper(k),v) end

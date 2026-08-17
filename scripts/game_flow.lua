@@ -54,10 +54,24 @@ local function start_game()
       splash.dead = true
 
       local cpu_player
+      -- when a single human joins, the CPU difficulty is chosen by which
+      -- player slot that human took: 1 (a/blue) easy, 2 (f) medium,
+      -- 3 (h) or 4 (l) hard.
+      local cpu_factory = blueprints.easy_enemy_factory
+      local cpu_difficulty = 'easy'
 
       if #players == 1 then
-        cpu_player = players[1] == 1 and 2 or 1
+        local human = players[1]
+        cpu_player = human == 1 and 2 or 1
         players[#players+1] = cpu_player
+        if human == 2 then
+          cpu_factory = blueprints.medium_enemy_factory
+          cpu_difficulty = 'medium'
+        elseif human >= 3 then
+          cpu_factory = blueprints.hard_enemy_factory
+          cpu_difficulty = 'hard'
+        end
+        game.log.record_ai(cpu_difficulty)
       end
 
       local positions = generate_positions(#players)
@@ -65,7 +79,7 @@ local function start_game()
         local pos = POSITIONS[#players][i]
         local facing = v2.norm(v2.rotate90(pos - CENTER))
         if p == cpu_player then
-          game.actors.new(blueprints.easy_enemy_factory,
+          game.actors.new(cpu_factory,
             {'transform', pos=pos, facing=facing},
             {'ship', player=p})
         else

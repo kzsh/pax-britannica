@@ -7,17 +7,17 @@ local blueprints = {}
 blueprints.background = game.make_blueprint('background',
   {'transform'},
   {'sprite', resource='background'})
-  
+
 blueprints.debris = game.make_blueprint('debris',
   {'transform'},
   {'debris'},
   {'sprite'})
-  
+
 blueprints.fish = game.make_blueprint('fish',
   {'transform'},
   {'fish'},
-  {'sprite'})  
-  
+  {'sprite'})
+
 blueprints.background_fx = game.make_blueprint('background_fx',
   {'background_fx'})
 
@@ -34,7 +34,7 @@ blueprints.fade_in = game.make_blueprint('fade',
 
 blueprints.fade_out = game.make_blueprint('fade',
   {'fade', from=0, to=1, duration=60})
-  
+
 blueprints.countdown = game.make_blueprint('countdown',
   {'countdown'},
   {'sprite'},
@@ -68,10 +68,10 @@ blueprints.selection_factory = game.make_blueprint('selection_factory',
   {'transform'},
   {'sprite', resource='factory_sprite', color={0.2, 0.2, 0.2}},
   {'selector'})
-  
+
 blueprints.splash = game.make_blueprint('splash',
   {'splash'})
-  
+
 blueprints.player_factory = game.make_blueprint('factory',
   {'transform'},
   {'sprite'},
@@ -82,30 +82,36 @@ blueprints.player_factory = game.make_blueprint('factory',
   {'resources'},
   {'production'},
   {'player_production'})
-  
-blueprints.easy_enemy_factory = game.make_blueprint('factory',
-  {'transform'},
-  {'sprite', resource='factory_sprite'},
-  {'collision', collision_type='ship', poly=collision.make_rectangle(170, 100)},
-  {'ship', turn_speed=0.00028, accel=0.002, hit_points=20000, sprites_table="factory_sprites"},
-  {'factory_damage'},
-  {'factory_ai'},
-  {'resources'},
-  {'production'},
-  {'easy_enemy_production'})
-  
+
+local function make_enemy_factory(harvest_multiplier)
+  return game.make_blueprint('factory',
+    {'transform'},
+    {'sprite', resource='factory_sprite'},
+    {'collision', collision_type='ship', poly=collision.make_rectangle(170, 100)},
+    {'ship', turn_speed=0.00028, accel=0.002, hit_points=20000, sprites_table="factory_sprites"},
+    {'factory_damage'},
+    {'factory_ai'},
+    {'resources'},
+    {'production'},
+    {'enemy_production', harvest_multiplier=harvest_multiplier})
+end
+
+blueprints.easy_enemy_factory = make_enemy_factory(0.8)
+blueprints.medium_enemy_factory = make_enemy_factory(1.0)
+blueprints.hard_enemy_factory = make_enemy_factory(1.05)
+
 blueprints.laser = game.make_blueprint('laser',
   {'transform'},
   {'sprite', resource='laser_sprite'},
   {'collision', collision_type='bullet', damage=10, poly=collision.make_rectangle(32, 1)},
   {'bullet'})
-  
+
 blueprints.bomb = game.make_blueprint('bomb',
   {'transform'},
   {'sprite', resource='bomb_sprite'},
   {'collision', collision_type='bullet', damage=200, poly=collision.make_rectangle(4, 4)},
-  {'bullet'})  
-  
+  {'bullet'})
+
 blueprints.missile = game.make_blueprint('missile',
   {'transform'},
   {'sprite', resource='missile_sprite'},
