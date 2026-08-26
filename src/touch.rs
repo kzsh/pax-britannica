@@ -77,7 +77,10 @@ mod tests {
 
     #[test]
     fn several_pointers_on_one_half_are_one_button() {
-        assert_eq!(buttons(&[0.1, 0.2, 0.3], &[1, 2]), [true, false, false, false]);
+        assert_eq!(
+            buttons(&[0.1, 0.2, 0.3], &[1, 2]),
+            [true, false, false, false]
+        );
     }
 
     #[test]
@@ -98,7 +101,10 @@ mod tests {
 
     #[test]
     fn a_lone_human_is_pressed_once_however_many_thumbs_land() {
-        assert_eq!(buttons(&[0.1, 0.6, 0.95], &[2]), [false, true, false, false]);
+        assert_eq!(
+            buttons(&[0.1, 0.6, 0.95], &[2]),
+            [false, true, false, false]
+        );
     }
 
     #[test]
@@ -113,6 +119,9 @@ mod tests {
     fn a_crowd_leaves_the_last_players_to_the_keyboard() {
         // four humans and two halves: the extra two are unreachable by thumb,
         // which is the price of a two-thumb scheme
-        assert_eq!(buttons(&[0.1, 0.9], &[1, 2, 3, 4]), [true, true, false, false]);
+        assert_eq!(
+            buttons(&[0.1, 0.9], &[1, 2, 3, 4]),
+            [true, true, false, false]
+        );
     }
 }

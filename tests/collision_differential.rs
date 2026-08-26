@@ -85,8 +85,7 @@ fn parse(line: &str) -> Case {
 #[test]
 fn matches_the_lua_implementation_exactly() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/traces/collision.txt");
-    let text = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("{path}: {e}"));
+    let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
 
     let mut checked = 0;
     let mut hits = 0;
