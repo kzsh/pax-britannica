@@ -26,5 +26,8 @@ rm "$out/v/$hash/index.html"
 # XMLHttpRequest from miniquad's fs_load_file -- resolves against <base>.
 sed "s|<head>|<head>\n    <base href=\"/v/$hash/\" />|" "$src/index.html" >"$out/index.html"
 cp web/_headers "$out/_headers"
+# Browsers and crawlers probe /favicon.ico regardless of the <link> above, and
+# that request predates any knowledge of the hashed prefix.
+cp web/favicon.ico "$out/favicon.ico"
 
 echo "web/upload: /v/$hash"

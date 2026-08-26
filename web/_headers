@@ -8,3 +8,7 @@
 
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
+
+# Unhashed, for the probes that never read index.html.
+/favicon.ico
+  Cache-Control: public, max-age=604800

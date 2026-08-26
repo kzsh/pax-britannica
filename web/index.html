@@ -8,6 +8,9 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
     <title>Pax Britannica</title>
+    <!-- player one's factory ship, cropped from sprites/factory_p1.png -->
+    <link rel="icon" href="favicon.png" type="image/png" sizes="180x180" />
+    <link rel="apple-touch-icon" href="favicon.png" />
     <style>
       html,
       body,
@@ -56,7 +59,9 @@
     <button id="fullscreen" type="button">Fullscreen</button>
     <script src="mq_js_bundle.js"></script>
     <script>
-      const canvas = document.getElementById("glcanvas");
+      // mq_js_bundle.js opens with `const canvas = document.querySelector("#glcanvas")`,
+      // a global lexical binding; declaring `canvas` again here is a
+      // SyntaxError that takes this entire script with it, load() included.
       const button = document.getElementById("fullscreen");
 
       // The whole document rather than the canvas, so the button survives the
