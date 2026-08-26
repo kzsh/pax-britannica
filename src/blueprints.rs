@@ -8,7 +8,6 @@
 //! actor, so it is preserved exactly as `blueprints.lua` lists it.
 
 use crate::collision::Polygon;
-use crate::constants::PLAY_SCALE;
 use crate::resources::SpriteId;
 use crate::rng::LuaRng;
 use crate::scripts::ScriptKind;
@@ -193,11 +192,7 @@ pub fn frigate(player: usize, pos: V2, facing: V2) -> Actor {
 }
 
 /// A factory's constant left turn, from `blueprints.lua`.
-///
-/// The circle it wanders is its terminal speed over this rate, so dividing by
-/// the field scale makes that circle grow with the field instead of leaving the
-/// factories crowded into the middle of a bigger sea.
-const FACTORY_TURN_SPEED: f64 = 0.00028 / PLAY_SCALE;
+const FACTORY_TURN_SPEED: f64 = 0.00028;
 const FACTORY_ACCEL: f64 = 0.002;
 
 /// The shared half of the two factory blueprints: everything down to the

@@ -32,7 +32,7 @@
 //! transition is in flight is a distinct state from all three of the named ones.
 
 use crate::blueprints;
-use crate::constants::{CENTER, PLAY_SCALE};
+use crate::constants::CENTER;
 use crate::game::Game;
 use crate::scripts::countdown::CountdownCallback;
 use crate::scripts::fade::FadeCallback;
@@ -42,13 +42,11 @@ use crate::world::ActorId;
 
 use std::f64::consts::PI;
 
-/// How far out from [`CENTER`] the factories start. A field distance, so it
-/// grows with the field.
-const RADIUS: f64 = 300.0 * PLAY_SCALE;
+/// How far out from [`CENTER`] the factories start.
+const RADIUS: f64 = 300.0;
 
 /// Spacing of the four selectors across the middle of the menu screen, and how
-/// far below it the countdown sits. Art distances: the menu is laid out around
-/// sprites that do not scale, so neither do these.
+/// far below it the countdown sits.
 const SELECTOR_SPACING: f64 = 130.0;
 const SELECTOR_OFFSET: V2 = v2(-75.0, 0.0);
 const COUNTDOWN_DROP: f64 = 200.0;

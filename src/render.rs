@@ -10,10 +10,8 @@
 //! flicker) already ran inside [`the_game::step`](crate::the_game::step); what
 //! is left here is pixels. That split is why the game can be run headless.
 //!
-//! The world is a fixed 4:3 field in game units --
-//! [`SCREEN_RIGHT`] by [`SCREEN_TOP`], sized by
-//! [`PLAY_SCALE`](crate::constants::PLAY_SCALE) -- letterboxed inside whatever
-//! the window happens to be.
+//! The world is a fixed 4:3 field in game units -- [`SCREEN_RIGHT`] by
+//! [`SCREEN_TOP`] -- letterboxed inside whatever the window happens to be.
 
 use std::collections::HashMap;
 

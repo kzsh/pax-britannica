@@ -12,9 +12,5 @@ use crate::constants::{BASE_HEIGHT, CENTER};
 use crate::v2::{V2, v2};
 
 /// Where the two sprites go, for phase 4. In game units, origin bottom left.
-///
-/// Offsets from the middle of the field, not fractions of it: the sprites keep
-/// their drawn size whatever [`PLAY_SCALE`](crate::constants::PLAY_SCALE) is, so
-/// the layout around them has to as well.
 pub const TITLE_POS: V2 = v2(CENTER.x, CENTER.y + BASE_HEIGHT / 4.0);
 pub const CREDITS_POS: V2 = v2(CENTER.x + 265.0, CENTER.y);

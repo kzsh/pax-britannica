@@ -409,7 +409,7 @@ Delete `dokidoki/`, `dokidoki-support/`, `*.c`, `Makefile`, `compiling.txt`, `ex
 
 ## Deliberate departures from the original
 
-Presentation changes made after phase 4 ran. Both are one-line knobs.
+Presentation changes made after phase 4 ran.
 
 - **No `sprites/background.png`.** The sea is a vertex-coloured mesh drawn in
   screen space by `render::draw_sea`, edge to edge including the letterbox bars,
@@ -417,13 +417,6 @@ Presentation changes made after phase 4 ran. Both are one-line knobs.
   are sampled from the middle and the corners of the sprite it replaced. The
   `background` actor is gone with it, so `the_game::make` spawns one fewer actor
   than `the_game.lua` does.
-- **A larger field.** `constants::PLAY_SCALE` multiplies the original 1024x768
-  into the field the camera fits on screen. The art does not scale, so a larger
-  field means smaller ships and more room. Field lengths scale with it: the ring
-  the factories start on, and `blueprints::FACTORY_TURN_SPEED`, which is divided
-  by it so the circle a factory wanders keeps its share of the field. Art lengths
-  do not: menu spacing, the title and credits offsets, weapon ranges, ship
-  speeds.
 
 ## Risks, in order of how much they'll cost you
 

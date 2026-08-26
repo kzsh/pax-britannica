@@ -22,22 +22,22 @@ pub fn update(game: &mut Game, id: ActorId) {
 #[cfg(test)]
 mod tests {
     use crate::blueprints;
-    use crate::constants::{CENTER, PLAY_SCALE};
+    use crate::constants::CENTER;
     use crate::game::Game;
     use crate::v2::V2;
     use crate::world::{Phase, run_phase};
 
-    /// Radius of the circle a factory wanders on the original 1024x768 field:
-    /// its terminal speed over its turn rate.
+    /// Radius of the circle a factory wanders: its terminal speed over its turn
+    /// rate.
     ///
     /// `ship::update` runs before `factory_ai::update` in the blueprint's script
     /// list, so a frame is drag and then thrust, and the speed this samples
     /// after the update phase settles on `accel / (1 - drag)`: about 0.067 units
     /// a frame, over 0.00028 radians a frame, or a radius of some 238 units.
-    const BASE_RADIUS: f64 = 0.002 / (1.0 - 0.97) / 0.00028;
+    const RADIUS: f64 = 0.002 / (1.0 - 0.97) / 0.00028;
 
     #[test]
-    fn a_factory_circles_at_a_radius_that_follows_the_field() {
+    fn a_factory_circles_at_the_radius_its_turn_rate_implies() {
         let mut game = Game::new();
         let id = game
             .world
@@ -51,7 +51,7 @@ mod tests {
 
         let ship = game.world.get(id).ship.as_ref().expect("factory ship");
         let radius = ship.velocity.mag() / ship.turn_speed;
-        let want = BASE_RADIUS * PLAY_SCALE;
+        let want = RADIUS;
 
         assert!(
             (radius - want).abs() < want * 0.01,

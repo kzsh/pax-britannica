@@ -1,4 +1,4 @@
-//! `components/constants.lua`, plus the field scale this port adds.
+//! `components/constants.lua`.
 
 use crate::v2::{V2, v2};
 
@@ -7,22 +7,11 @@ use crate::v2::{V2, v2};
 pub const BASE_WIDTH: f64 = 1024.0;
 pub const BASE_HEIGHT: f64 = 768.0;
 
-/// How much wider and taller than [`BASE_WIDTH`] by [`BASE_HEIGHT`] the field
-/// is. The art is not scaled with it and the camera still fits the whole field
-/// on screen, so raising this leaves every ship its drawn size and gives it more
-/// room to fly in.
-///
-/// Lengths that belong to the field scale with it: the ring the factories start
-/// on, and the circle a factory's constant turn carries it around. Lengths that
-/// belong to the art do not -- the menu's spacing, the offsets of the title and
-/// the credits, weapon ranges, ship speeds.
-pub const PLAY_SCALE: f64 = 1.5;
-
 /// The play area, in game units. The window is letterboxed to 4:3 around it.
 pub const SCREEN_LEFT: f64 = 0.0;
-pub const SCREEN_RIGHT: f64 = BASE_WIDTH * PLAY_SCALE;
+pub const SCREEN_RIGHT: f64 = BASE_WIDTH;
 pub const SCREEN_BOTTOM: f64 = 0.0;
-pub const SCREEN_TOP: f64 = BASE_HEIGHT * PLAY_SCALE;
+pub const SCREEN_TOP: f64 = BASE_HEIGHT;
 
 /// The middle of the play area.
 pub const CENTER: V2 = v2(
