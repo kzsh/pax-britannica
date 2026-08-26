@@ -6,16 +6,19 @@ default: check
 run:
     cargo run --release --bin pax
 
-# Build the browser version into web/dist
-wasm:
-    cargo build --release --target wasm32-unknown-unknown --bin pax
+# Fetch miniquad's JS glue, which the wasm imports; upstream ships no
+# crates.io copy, and web/dist is not in the repo
+js-bundle:
     mkdir -p web/dist
-    cp target/wasm32-unknown-unknown/release/pax.wasm web/dist/pax.wasm
-    cp web/index.html web/favicon.png web/dist/
-    # miniquad's JS glue, which the wasm imports; upstream ships no crates.io copy
     [[ -f web/dist/mq_js_bundle.js ]] || \
         curl -sSfL -o web/dist/mq_js_bundle.js \
             https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js
+
+# Build the browser version into web/dist
+wasm: js-bundle
+    cargo build --release --target wasm32-unknown-unknown --bin pax
+    cp target/wasm32-unknown-unknown/release/pax.wasm web/dist/pax.wasm
+    cp web/index.html web/favicon.png web/dist/
     # load_texture and load_sound fetch these paths relative to the page
     ln -sfn ../../sprites web/dist/sprites
     ln -sfn ../../audio web/dist/audio
@@ -63,5 +66,5 @@ check: web-check
     cargo test
 
 # index.html and miniquad's bundle share one global scope; check they can
-web-check:
+web-check: js-bundle
     node test/web_globals.mjs
