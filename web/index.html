@@ -21,7 +21,15 @@
         height: 100%;
         overflow: hidden;
         position: absolute;
-        background: black;
+        /* `render.rs`'s `sea_color`: SEA_CENTER in the middle, SEA_EDGE at the
+           farthest corner, linear in between. Behind the canvas as well as the
+           loading screen, so a frame the game has not drawn yet reads as sea
+           rather than as a hole. */
+        background: radial-gradient(
+          circle farthest-corner at 50% 50%,
+          #0c1213 0%,
+          #213134 100%
+        );
         z-index: 0;
         /* the browser's own gestures -- scroll, pinch, pull to refresh --
            would otherwise eat the touches the game runs on */
@@ -50,12 +58,117 @@
       #fullscreen:hover {
         opacity: 1;
       }
+
+      #loading {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        transition: opacity 400ms ease-out;
+      }
+
+      #loading.done {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* The game's 1024x768 field, letterboxed the way macroquad's camera
+         letterboxes it, so every sprite below can be placed at the game
+         coordinates it is drawn at and land in the same relative spot. */
+      #stage {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(100vw, 133.3333vh);
+        aspect-ratio: 4 / 3;
+      }
+
+      #stage > * {
+        position: absolute;
+        transform: translate(-50%, -50%);
+      }
+
+      #stage img {
+        opacity: 0;
+        transition: opacity 300ms ease-in;
+      }
+
+      #stage img.shown {
+        opacity: 1;
+      }
+
+      /* A selection factory faces up (`Transform::facing(pos, V2::J)`) and the
+         art is drawn nose-right, so the sprite turns a quarter turn. Unpicked,
+         `blueprints::selection_factory` tints it to 0.2 grey and leaves it
+         there until someone joins. */
+      #stage img.ship {
+        filter: brightness(0.2);
+        transform: translate(-50%, -50%) rotate(-90deg);
+      }
+
+      /* `draw_selector`'s `level`: the pulse runs cos over 180 ticks at 60Hz,
+         from the fade floor of 0.2 up to full and back. */
+      #stage img.button {
+        animation: pulse 3s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          filter: brightness(0.2);
+        }
+        50% {
+          filter: brightness(1);
+        }
+      }
+
+      /* `draw_selector`'s dial: a disc of DIAL_RADIUS 32 at 60% black, under
+         a_button.png. The pulse it does is the game's job, not ours. */
+      .dial {
+        width: 6.25%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.6);
+      }
+
+      #bar {
+        left: 50%;
+        top: 80.5%;
+        width: 44%;
+        height: 10px;
+        border: 1px solid #3a5a5e;
+        border-radius: 5px;
+        background: rgba(0, 0, 0, 0.45);
+        overflow: hidden;
+      }
+
+      #fill {
+        height: 100%;
+        width: 0;
+        /* player one's blue, #3db6e3, straight off factory_p1.png */
+        background: #3db6e3;
+        transition: width 200ms linear;
+      }
+
+      #status {
+        left: 50%;
+        top: 85.7%;
+        color: #7f9a9d;
+        font: 13px/1 ui-monospace, monospace;
+        white-space: nowrap;
+      }
     </style>
   </head>
 
   <body>
     <!-- tabindex makes the canvas focusable; without it key events never reach the game -->
     <canvas id="glcanvas" tabindex="1"></canvas>
+    <div id="loading">
+      <div id="stage">
+        <div id="bar"><div id="fill"></div></div>
+        <div id="status">loading</div>
+      </div>
+    </div>
     <button id="fullscreen" type="button">Fullscreen</button>
     <script src="mq_js_bundle.js"></script>
     <script>
@@ -85,7 +198,188 @@
         canvas.focus();
       });
 
-      load("pax.wasm");
+      // The title screen, rebuilt in HTML from the sprites the game itself
+      // draws it with: `splash.rs`'s TITLE_POS and CREDITS_POS, and
+      // `game_flow.rs`'s four selectors at CENTER + SELECTOR_OFFSET, spaced by
+      // SELECTOR_SPACING. Game coordinates, origin bottom left, y up.
+      const SELECTORS = [242, 372, 502, 632];
+      const stage = document.getElementById("stage");
+      const scene = [
+        { src: "sprites/title.png", x: 512, y: 576, w: 640 },
+        { src: "sprites/credits.png", x: 777, y: 384, w: 136 },
+        ...SELECTORS.flatMap((x, index) => [
+          { src: `sprites/factory_p${index + 1}.png`, x, y: 384, w: 180, cls: "ship" },
+          // SELECTOR_DRAW_OFFSET: the dial sits 4 units behind the ship, and a
+          // selection factory faces up.
+          { dial: true, x, y: 380 },
+          { src: "sprites/a_button.png", x, y: 380, w: 42, cls: "button" },
+        ]),
+      ];
+
+      const place = (element, item) => {
+        element.style.left = `${(item.x / 1024) * 100}%`;
+        element.style.top = `${((768 - item.y) / 768) * 100}%`;
+        if (item.w) element.style.width = `${(item.w / 1024) * 100}%`;
+        stage.append(element);
+      };
+
+      // Bytes, not files: music.ogg is two thirds of the download on its own,
+      // and a bar counting files would sit still through it.
+      const fill = document.getElementById("fill");
+      const status = document.getElementById("status");
+      let total = 0;
+      let done = 0;
+
+      function advance(bytes) {
+        done += bytes;
+        const fraction = total ? Math.min(1, done / total) : 0;
+        fill.style.width = `${fraction * 100}%`;
+        status.textContent = `loading ${Math.round(fraction * 100)}%`;
+      }
+
+      // Reads the body chunk by chunk so the bar can move during the fetch.
+      // Keeps the bytes only for the wasm: the assets are wanted in the HTTP
+      // cache, not in memory, because the game refetches them by the same URLs.
+      async function fetchTracked(url, keep) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`${url}: ${response.status}`);
+        if (!total) {
+          // No manifest. Content-Length is the transfer size, so this reads
+          // long under compression; it is a bar, not an estimate of anything.
+          total = Number(response.headers.get("content-length")) || 0;
+        }
+        if (!response.body) {
+          const buffer = await response.arrayBuffer();
+          advance(buffer.byteLength);
+          return keep ? new Uint8Array(buffer) : null;
+        }
+        const reader = response.body.getReader();
+        const chunks = [];
+        let length = 0;
+        for (;;) {
+          const { done: finished, value } = await reader.read();
+          if (finished) break;
+          length += value.byteLength;
+          advance(value.byteLength);
+          if (keep) chunks.push(value);
+        }
+        if (!keep) return null;
+        const bytes = new Uint8Array(length);
+        let at = 0;
+        for (const chunk of chunks) {
+          bytes.set(chunk, at);
+          at += chunk.byteLength;
+        }
+        return bytes;
+      }
+
+      // Six at a time: enough to fill the pipe, few enough to leave connections
+      // for the loading screen's own sprites, which are still arriving.
+      async function fetchAll(paths, width) {
+        const queue = [...paths];
+        const worker = async () => {
+          for (let path = queue.shift(); path; path = queue.shift()) {
+            await fetchTracked(path, false);
+          }
+        };
+        await Promise.all(Array.from({ length: width }, worker));
+      }
+
+      function start(wasm) {
+        // miniquad's load() calls fetch(url) synchronously and cannot be handed
+        // bytes, so the one call it makes is answered from what has already been
+        // downloaded. Restored on the next line, before anything else can see
+        // the substitute.
+        const original = window.fetch;
+        window.fetch = () =>
+          Promise.resolve(
+            new Response(wasm, { headers: { "Content-Type": "application/wasm" } }),
+          );
+        load("pax.wasm");
+        window.fetch = original;
+
+        // `wasm_exports` is set the moment the module instantiates. The sprites
+        // and the music the game then loads for itself are cache hits by now,
+        // and the page behind the canvas is the same sea gradient, so there is
+        // nothing left worth waiting for.
+        const poll = setInterval(() => {
+          if (window.wasm_exports === undefined) return;
+          clearInterval(poll);
+          status.textContent = "";
+          document.getElementById("loading").classList.add("done");
+          canvas.focus();
+        }, 50);
+      }
+
+      async function boot() {
+        // The sprites the loading screen is built from are shown as they land,
+        // so the screen assembles itself out of the download it reports on.
+        // Their bytes are credited to the bar once both the image and the
+        // manifest have arrived, in whichever order that happens.
+        const priority = new Map();
+        for (const item of scene) {
+          if (item.dial) {
+            const dial = document.createElement("div");
+            dial.className = "dial";
+            place(dial, item);
+            continue;
+          }
+          const entry = { bytes: 0, loaded: false, credited: false };
+          priority.set(item.src, entry);
+          const image = document.createElement("img");
+          image.alt = "";
+          if (item.cls) image.className = item.cls;
+          image.addEventListener("load", () => {
+            image.classList.add("shown");
+            entry.loaded = true;
+            credit(entry);
+          });
+          image.src = item.src;
+          place(image, item);
+        }
+
+        function credit(entry) {
+          if (entry.credited || !entry.loaded || !entry.bytes) return;
+          entry.credited = true;
+          advance(entry.bytes);
+        }
+
+        let manifest = null;
+        try {
+          const response = await fetch("manifest.json");
+          if (response.ok) manifest = await response.json();
+        } catch {
+          // Served without a build step, or from an older deploy. The bar falls
+          // back to the wasm alone, which is most of the wait regardless.
+        }
+
+        if (manifest) {
+          total =
+            manifest.wasm + manifest.assets.reduce((sum, asset) => sum + asset.bytes, 0);
+          for (const asset of manifest.assets) {
+            const entry = priority.get(asset.path);
+            if (entry) {
+              entry.bytes = asset.bytes;
+              credit(entry);
+            }
+          }
+          advance(0);
+        }
+
+        const wasm = await fetchTracked("pax.wasm", true);
+        if (manifest) {
+          await fetchAll(
+            manifest.assets.map((asset) => asset.path).filter((path) => !priority.has(path)),
+            6,
+          );
+        }
+        start(wasm);
+      }
+
+      boot().catch((error) => {
+        status.textContent = `failed: ${error.message}`;
+        console.error(error);
+      });
       canvas.focus();
     </script>
   </body>

@@ -19,6 +19,8 @@ wasm:
     # load_texture and load_sound fetch these paths relative to the page
     ln -sfn ../../sprites web/dist/sprites
     ln -sfn ../../audio web/dist/audio
+    # after the symlinks: the manifest measures what they point at
+    web/manifest.sh
 
 # Serve the browser version at http://localhost:8000
 serve port='8000': wasm
@@ -31,6 +33,19 @@ bundle: wasm
 # Serve exactly what gets deployed, at http://localhost:8000
 preview port='8000': bundle
     python3 -m http.server {{port}} --directory web/upload
+
+# wrangler can only set the production branch when the project is created, so
+# changing it afterwards is the REST API or the dashboard. Wants a token with
+# Pages:Edit; the session `wrangler login` leaves behind will not do.
+
+# Point the Pages project at a different production branch
+production-branch branch='main' project='pax-britannica':
+    curl -sSf -X PATCH \
+        "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/{{project}}" \
+        -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"production_branch": "{{branch}}"}' \
+        | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["success"], r["result"]["production_branch"] if r["success"] else r["errors"])'
 
 # Publish to Cloudflare Pages (needs CLOUDFLARE_ACCOUNT_ID, wrangler login)
 deploy project='pax-britannica' branch='main': bundle

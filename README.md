@@ -123,6 +123,14 @@ whole set to the new prefix at once and [web/_headers](web/_headers) can mark it
 `immutable`. Only `index.html` is ever revalidated. The deploy prints a
 `*.pages.dev` URL.
 
+The wasm is a megabyte and the game blocks on 6.4MB of sprites and music before
+its first frame, so `web/index.html` opens with the title screen rebuilt in HTML
+— the sea gradient from `render.rs`, the sprites at the coordinates `splash.rs`
+and `game_flow.rs` place them — and a progress bar over it. The bar counts bytes
+against `manifest.json`, which [web/manifest.sh](web/manifest.sh) writes at build
+time; the page downloads everything itself, then hands the wasm to miniquad and
+lets the game refetch the rest from cache.
+
 The favicon is player one's factory ship, `sprites/factory_p1.png` scaled to a
 square and flattened onto the sea colour of `sprites/background.png`, since a
 faviconless page has nothing but a transparent hull to show. `web/favicon.png`
