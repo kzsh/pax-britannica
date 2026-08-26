@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- no zoom: a double tap is a build order, not a request to magnify -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>Pax Britannica</title>
     <style>
       html,
@@ -15,6 +20,32 @@
         position: absolute;
         background: black;
         z-index: 0;
+        /* the browser's own gestures -- scroll, pinch, pull to refresh --
+           would otherwise eat the touches the game runs on */
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* Sits above the canvas, so a tap on it is not also a build order: the
+         touch lands on the button and the canvas never sees it. */
+      #fullscreen {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 1;
+        padding: 8px 12px;
+        border: 1px solid #446;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.4);
+        color: #99a;
+        font: 14px/1 system-ui, sans-serif;
+        opacity: 0.5;
+      }
+
+      #fullscreen:hover {
+        opacity: 1;
       }
     </style>
   </head>
@@ -22,10 +53,35 @@
   <body>
     <!-- tabindex makes the canvas focusable; without it key events never reach the game -->
     <canvas id="glcanvas" tabindex="1"></canvas>
+    <button id="fullscreen" type="button">Fullscreen</button>
     <script src="mq_js_bundle.js"></script>
     <script>
+      const canvas = document.getElementById("glcanvas");
+      const button = document.getElementById("fullscreen");
+
+      // The whole document rather than the canvas, so the button survives the
+      // transition and there is a way back out on a phone, which has no F11.
+      // miniquad resizes the canvas from window.onresize either way.
+      button.addEventListener("click", () => {
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          document.documentElement.requestFullscreen().then(() => {
+            // Landscape suits a 4:3 field, and fails on desktop and on iOS.
+            // Rejections are expected and uninteresting.
+            screen.orientation?.lock?.("landscape").catch(() => {});
+          }, () => {});
+        }
+        canvas.focus();
+      });
+
+      document.addEventListener("fullscreenchange", () => {
+        button.textContent = document.fullscreenElement ? "Exit" : "Fullscreen";
+        canvas.focus();
+      });
+
       load("pax.wasm");
-      document.getElementById("glcanvas").focus();
+      canvas.focus();
     </script>
   </body>
 </html>

@@ -16,6 +16,15 @@ players can join as long as the 5-second countdown doesn't run out. The `a`,
 `f`, `h` and `l` keys are mapped to players 1-4. Alternately, you can play with
 Xbox controllers.
 
+On a touchscreen the screen is split down the middle: tapping the left half
+joins player 1, the right half player 2, and each thumb then holds the half it
+joined with. One player alone gets a CPU opponent, and the whole screen becomes
+theirs.
+
+`F11` toggles fullscreen on the desktop. In the browser, use the button in the
+corner: it takes the whole page fullscreen and asks for landscape, and tapping
+it again is the way back out on a phone.
+
 ## Controls
 
 The game is controlled entirely with one button, the `A` button on the Xbox 360
@@ -110,8 +119,10 @@ just serve                                  # build into web/dist and serve it
 
 `just wasm` builds `web/dist` without serving it: the `.wasm`, miniquad's JS
 glue, `web/index.html` and symlinks to `sprites/` and `audio/`, which the game
-fetches by the same relative paths it reads on a desktop. Click the canvas
-before playing, both to give it keyboard focus and to let the music start.
+fetches by the same relative paths it reads on a desktop. The mouse counts as a
+touch, so the split-screen controls can be tried without a phone. Click the
+canvas before playing, both to give it keyboard focus and to let the music
+start.
 
 ## Credits
 
