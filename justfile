@@ -24,6 +24,18 @@ wasm:
 serve port='8000': wasm
     python3 -m http.server {{port}} --directory web/dist
 
+# Flatten web/dist into web/upload: wrangler does not follow the symlinks
+bundle: wasm
+    rm -rf web/upload
+    mkdir -p web/upload
+    cp -RL web/dist/. web/upload/
+    cp web/_headers web/upload/
+
+# Publish to Cloudflare Pages (needs CLOUDFLARE_ACCOUNT_ID, wrangler login)
+deploy project='pax-britannica' branch='main': bundle
+    npx --yes wrangler@4 pages deploy web/upload \
+        --project-name {{project}} --branch {{branch}} --commit-dirty=true
+
 # Run the Rust game with no window and print a summary
 smoke frames='12000':
     cargo run --release --bin headless -- {{frames}}

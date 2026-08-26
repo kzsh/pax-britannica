@@ -1,0 +1,10 @@
+# Hashed prefix: a given URL's contents can never change, so never revalidate.
+/v/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# index.html carries the current hash and is the only thing that must be fresh.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate

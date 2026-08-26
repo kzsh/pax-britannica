@@ -124,6 +124,35 @@ touch, so the split-screen controls can be tried without a phone. Click the
 canvas before playing, both to give it keyboard focus and to let the music
 start.
 
+### Hosting it on Cloudflare Pages
+
+The build is static files, so Pages serves it as-is, `.wasm` included. One-time
+setup, with the account id from the Cloudflare dashboard:
+
+```bash
+export CLOUDFLARE_ACCOUNT_ID=...
+npx wrangler@4 login
+npx wrangler@4 pages project create pax-britannica --production-branch main
+```
+
+Then, for each release:
+
+```bash
+just deploy
+```
+
+`just bundle` runs [web/bundle.sh](web/bundle.sh), which lays out `web/upload`:
+the payload under `/v/<hash>/`, hashed over its own contents, and an `index.html`
+at the root carrying `<base href="/v/<hash>/">`. The game asks for `pax.wasm`,
+`sprites/*.png` and `audio/music.ogg` by relative path, so the base tag moves the
+whole set to the new prefix at once and [web/_headers](web/_headers) can mark it
+`immutable`. Only `index.html` is ever revalidated. The deploy prints a
+`*.pages.dev` URL.
+
+To reach it at a subdomain of a zone in the same account, add the hostname under
+the project's *Custom domains*; Cloudflare writes the proxied CNAME itself. A
+zone elsewhere needs that CNAME to `<project>.pages.dev` created by hand.
+
 ## Credits
 
 Game design and programming by Henk Boom, Renaud Bédard and Matthew Gallant.
