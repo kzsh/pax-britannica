@@ -1,7 +1,7 @@
-This is a vibe-coded port of Pax Britannica to Lua 5.4 and GLFW 3, made with
+This is a vibe-coded port of Pax Britannica to Rust and macroquad, made with
 an LLM coding agent. It has not been reviewed line by line by a human.
 
-The original codebase, which this came from, is at:
+The original codebase, Lua on a hand-rolled engine, is at:
     https://github.com/henkboom/pax-britannica
 
 ====================================================

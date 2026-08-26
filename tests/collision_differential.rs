@@ -2,11 +2,9 @@
 //! golden trace, case for case and bit for bit.
 //!
 //! Unit tests can only say the port is plausible. This says it agrees with the
-//! thing it has to agree with. Regenerate the vectors with:
-//!
-//! ```text
-//! lua5.4 test/collision_vectors.lua > traces/collision.txt
-//! ```
+//! thing it has to agree with. `traces/collision.txt` is frozen: the Lua that
+//! emitted it is no longer in this repo, so the vectors are evidence, not
+//! something to regenerate.
 //!
 //! The vectors have been mutation-checked: normalising the separating axis in
 //! `separate_by_axes` makes this test fail on case 8. Worth redoing if the
@@ -88,7 +86,7 @@ fn parse(line: &str) -> Case {
 fn matches_the_lua_implementation_exactly() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/traces/collision.txt");
     let text = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("{path}: {e}\nregenerate with test/collision_vectors.lua"));
+        .unwrap_or_else(|e| panic!("{path}: {e}"));
 
     let mut checked = 0;
     let mut hits = 0;

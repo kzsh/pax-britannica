@@ -10,9 +10,11 @@ whether frame 8,431 hashes the same.
 What that means in practice:
 
 - **`src/bin/trace.rs` will not be written**, and nothing will be diffed against
-  `traces/golden.txt`. The trace, `test/trace.lua` and the harness stay in the
-  repo as a debugging tool for when behaviour looks wrong, and as the record of
-  how the ported scripts were derived. They are no longer a gate.
+  `traces/golden.txt`. The Lua is gone from this repo, so the trace is a frozen
+  artefact: still readable as the record of what the original did, no longer
+  reproducible here. Read it against
+  [henkboom/pax-britannica](https://github.com/henkboom/pax-britannica) if a
+  behaviour ever needs settling.
 - **Port by reading the Lua, not by measuring the interpreter.** Transliterate
   the script, write a test that the behaviour is sane, move on. Do not go
   hunting for exact RNG draw counts in new code.
@@ -58,8 +60,7 @@ Two binaries: `pax` (the game, macroquad) and `headless` (the same game with no 
 
 ### Environment
 
-- `lua5.4` (5.4.7) on `PATH`. Rust 1.97.1 lives at `~/.cargo/bin`; there is an `.envrc` (direnv) that sets it up, but in a shell where direnv has not run, `export PATH="$HOME/.cargo/bin:$PATH"` first.
-- `just` is **not installed**, so the `justfile` recipes are written but unverified. Run the commands directly.
+- Rust 1.97.1 lives at `~/.cargo/bin`; there is an `.envrc` (direnv) that sets it up, but in a shell where direnv has not run, `export PATH="$HOME/.cargo/bin:$PATH"` first.
 
 ### Commands
 
@@ -68,10 +69,6 @@ cargo run --release --bin pax                 # the game (needs a display)
 cargo run --release --bin headless 12000      # the game, no window, with a summary
 cargo test                                    # 187 tests
 cargo clippy --all --benches --tests --examples --all-features
-lua5.4 test/headless.lua 12000                # Lua smoke test
-lua5.4 test/trace.lua 12000 --out traces/golden.txt          # regenerate oracle (~100s)
-lua5.4 test/trace.lua 12000 --out /dev/null --dump 500:505   # full state for a frame range
-lua5.4 test/particle_draws.lua                # RNG draw counts per particle effect
 ```
 
 ### The next concrete step

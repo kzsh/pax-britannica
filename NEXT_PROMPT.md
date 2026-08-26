@@ -37,15 +37,15 @@ write with git.
 2. **Fix what is wrong on screen.** PORTING.md's "next concrete step" section
    lists the four most likely failures in order — vertical flip, pie-slice
    winding, the health bar's manual texture wrap, blending. Compare against the
-   original if it still builds, or against `screenshot_*.png` in the repo root.
-3. Then, if the game looks right: gamepads (needs `gilrs` — ask before adding),
-   and phase 5, deleting the Lua and C trees.
+   original, which now lives only at
+   [henkboom/pax-britannica](https://github.com/henkboom/pax-britannica), or
+   against `screenshot_*.png` in the repo root.
+3. Then, if the game looks right: gamepads (needs `gilrs` — ask before adding).
 
 ## Environment
 
 - Rust lives at `~/.cargo/bin`, not on `PATH`: `export PATH="$HOME/.cargo/bin:$PATH"`, or let direnv run `.envrc`.
-- `just` may not be installed. The `justfile` recipes are correct but unverified; run the commands directly.
-- `lua5.4` was on `PATH` in earlier sessions and is not any more. If you want the original as a reference, install it; `test/headless.lua` and `test/trace.lua` still work.
+- The Lua and C trees are deleted. `traces/golden.txt` and `traces/collision.txt` survive as frozen evidence of what the original did; nothing here can regenerate them.
 
 ```bash
 cargo run --release --bin pax

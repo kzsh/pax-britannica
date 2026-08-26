@@ -11,7 +11,7 @@ wasm:
     cargo build --release --target wasm32-unknown-unknown --bin pax
     mkdir -p web/dist
     cp target/wasm32-unknown-unknown/release/pax.wasm web/dist/pax.wasm
-    cp web/index.html web/dist/
+    cp web/index.html web/favicon.png web/dist/
     # miniquad's JS glue, which the wasm imports; upstream ships no crates.io copy
     [[ -f web/dist/mq_js_bundle.js ]] || \
         curl -sSfL -o web/dist/mq_js_bundle.js \
@@ -24,12 +24,13 @@ wasm:
 serve port='8000': wasm
     python3 -m http.server {{port}} --directory web/dist
 
-# Flatten web/dist into web/upload: wrangler does not follow the symlinks
+# Lay out web/upload for deployment, under a content-hashed prefix
 bundle: wasm
-    rm -rf web/upload
-    mkdir -p web/upload
-    cp -RL web/dist/. web/upload/
-    cp web/_headers web/upload/
+    web/bundle.sh
+
+# Serve exactly what gets deployed, at http://localhost:8000
+preview port='8000': bundle
+    python3 -m http.server {{port}} --directory web/upload
 
 # Publish to Cloudflare Pages (needs CLOUDFLARE_ACCOUNT_ID, wrangler login)
 deploy project='pax-britannica' branch='main': bundle
@@ -40,43 +41,12 @@ deploy project='pax-britannica' branch='main': bundle
 smoke frames='12000':
     cargo run --release --bin headless -- {{frames}}
 
-# Smoke-test the original Lua with no window
-headless frames='1200':
-    lua5.4 test/headless.lua {{frames}}
-
-# Record the golden state trace the Rust port is checked against
-trace frames='12000':
-    mkdir -p traces
-    lua5.4 test/trace.lua {{frames}} --out traces/golden.txt
-
-# Check that the trace is reproducible run to run
-trace-verify frames='2000':
-    mkdir -p traces
-    lua5.4 test/trace.lua {{frames}} --out traces/a.txt
-    lua5.4 test/trace.lua {{frames}} --out traces/b.txt
-    cmp traces/a.txt traces/b.txt && echo "trace is deterministic"
-    rm -f traces/a.txt traces/b.txt
-
-# First frame at which two traces disagree, with context
-# (diff exits 1 when they differ, which is the interesting case, hence `|| true`)
-trace-diff a b:
-    diff <(grep -v '^#' {{a}}) <(grep -v '^#' {{b}}) | head -20 || true
-
-# Dump every field of every actor for a frame range, to localise a divergence
-trace-dump first last frames='12000':
-    lua5.4 test/trace.lua {{frames}} --out /dev/null --dump {{first}}:{{last}}
-
-# Regenerate the Lua PRNG vectors hardcoded in src/rng.rs
-rng-vectors:
-    lua5.4 test/rng_vectors.lua
-
-# Regenerate the collision differential-test vectors
-collision-vectors:
-    mkdir -p traces
-    lua5.4 test/collision_vectors.lua > traces/collision.txt
-
 # Rust: format, lint, test
-check:
+check: web-check
     cargo fmt --check
     cargo clippy --all --benches --tests --examples --all-features
     cargo test
+
+# index.html and miniquad's bundle share one global scope; check they can
+web-check:
+    node test/web_globals.mjs

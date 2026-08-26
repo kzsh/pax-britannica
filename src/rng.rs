@@ -105,14 +105,14 @@ mod tests {
     // The expected floats are Lua's %.17g output copied verbatim, which is the
     // shortest form guaranteed to round-trip a double. Clippy would rather they
     // were trimmed to the digits that survive parsing; leaving them exactly as
-    // Lua printed them is the point, so that a vector can be diffed straight
-    // against a fresh run of test/rng_vectors.lua.
+    // Lua printed them is the point: they are the record of what the
+    // interpreter said, digit for digit.
     #![allow(clippy::excessive_precision)]
 
     use super::*;
 
     // Every expected value below was produced by the lua5.4 binary itself, not
-    // by reasoning about the algorithm. Regenerate with test/rng_vectors.lua.
+    // by reasoning about the algorithm.
 
     #[test]
     fn floats_match_lua_seed_1() {

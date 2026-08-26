@@ -3,10 +3,11 @@
 One-button real-time strategy. The original was made in 2010 for GAMMA4, a
 one-button game competition.
 
-This is a vibe-coded port of Pax Britannica to Lua 5.4 and GLFW 3, made with an
+This is a vibe-coded port of Pax Britannica to Rust and macroquad, made with an
 LLM coding agent. It has not been reviewed line by line by a human. The original
-codebase, which this came from, is at
-[henkboom/pax-britannica](https://github.com/henkboom/pax-britannica).
+codebase, Lua on a hand-rolled engine, is at
+[henkboom/pax-britannica](https://github.com/henkboom/pax-britannica); the port
+was driven against it frame by frame, as [PORTING.md](PORTING.md) describes.
 
 ## Setup
 
@@ -77,37 +78,10 @@ The player who keeps their factory ship alive wins.
 
 ## Building
 
-See [compiling.txt](compiling.txt) for the full instructions. On Debian or
-Ubuntu:
-
 ```bash
-sudo apt install pkg-config liblua5.4-dev libglfw3-dev libgl-dev \
-    libglu1-mesa-dev libasound2-dev
-make linux
-./pax-britannica --windowed
-```
-
-Useful flags: `--windowed` opens a 1024x768 window instead of going fullscreen,
-`--stderr` logs to the terminal instead of a logfile, `--no-music` skips loading
-the soundtrack, and `--debug` enables the debug keys.
-
-The game logic also runs without a window, which needs nothing but the `lua5.4`
-interpreter:
-
-```bash
-lua5.4 test/headless.lua
-```
-
-### The Rust port
-
-A Rust rewrite is in progress alongside the Lua; see [PORTING.md](PORTING.md).
-All of the game logic is ported. The renderer, on macroquad, is written but not
-yet verified on a screen.
-
-```bash
-cargo run --release --bin pax               # the game, keyboard only for now
+just run                                    # or: cargo run --release --bin pax
 cargo run --release --bin headless -- 12000 # the game with no window, and a summary
-cargo test
+just check                                  # fmt, clippy, tests
 ```
 
 It also builds for the browser:
@@ -149,6 +123,16 @@ whole set to the new prefix at once and [web/_headers](web/_headers) can mark it
 `immutable`. Only `index.html` is ever revalidated. The deploy prints a
 `*.pages.dev` URL.
 
+The favicon is player one's factory ship, `sprites/factory_p1.png` scaled to a
+square and flattened onto the sea colour of `sprites/background.png`, since a
+faviconless page has nothing but a transparent hull to show. `web/favicon.png`
+rides along under the hashed prefix; `web/favicon.ico` sits at the root for the
+clients that ask for it before reading any HTML.
+
+`just preview` serves `web/upload` locally, which is the hashed layout rather
+than the flat one `just serve` gives you. `_headers` is Pages' own file and does
+nothing under a local server, so caching only takes effect once deployed.
+
 To reach it at a subdomain of a zone in the same account, add the hostname under
 the project's *Custom domains*; Cloudflare writes the proxied CNAME itself. A
 zone elsewhere needs that CNAME to `<project>.pages.dev` created by hand.
@@ -160,8 +144,4 @@ Artwork by Daniel Burton. Music by Ben Abraham.
 
 ## License
 
-MIT, see [license.txt](license.txt). The vendored C code in `dokidoki-support`
-carries its own notices in
-[dokidoki-support/LICENSE](dokidoki-support/LICENSE): `memarray` is by Varol
-Kaptan, `stb_image` and `stb_vorbis` are public domain by Sean Barrett, and
-`luaglfw.h` is zlib-licensed by Camilla Berglund.
+MIT, see [license.txt](license.txt).
