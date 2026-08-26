@@ -13,7 +13,7 @@ const BUFFER: f64 = 500.0;
 
 /// The play area a bullet is culled against. `game.opengl_2d.width/height` in
 /// the Lua, which `the_game.lua` sets to the screen size.
-const SCREEN: (f64, f64) = (1024.0, 768.0);
+const SCREEN: (f64, f64) = (crate::constants::SCREEN_RIGHT, crate::constants::SCREEN_TOP);
 
 #[derive(Clone, Copy, Debug)]
 pub struct Bullet {

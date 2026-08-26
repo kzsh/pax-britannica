@@ -2,19 +2,17 @@
 //!
 //! One actor per scene, alive for the whole scene. Every frame it rolls for a
 //! piece of debris (15%) and a fish (3%), each dropped at a uniformly random
-//! point over the whole 1024x768 field and given a random one of its sprites.
+//! point over the whole field and given a random one of its sprites.
 //!
 //! Both spawns start fully transparent; the drifting script fades them in.
 
 use crate::blueprints;
+use crate::constants::{SCREEN_RIGHT, SCREEN_TOP};
 use crate::game::Game;
 use crate::scripts::debris::Debris;
 use crate::scripts::fish::Fish;
 use crate::v2::v2;
 use crate::world::ActorId;
-
-const SCREEN_WIDTH: f64 = 1024.0;
-const SCREEN_HEIGHT: f64 = 768.0;
 
 const DEBRIS_CHANCE: f64 = 0.15;
 const FISH_CHANCE: f64 = 0.03;
@@ -25,8 +23,8 @@ const FISH_SPRITES: i64 = 8;
 pub fn update(game: &mut Game, _id: ActorId) {
     if game.rng.next_f64() < DEBRIS_CHANCE {
         let pos = v2(
-            game.rng.next_f64() * SCREEN_WIDTH,
-            game.rng.next_f64() * SCREEN_HEIGHT,
+            game.rng.next_f64() * SCREEN_RIGHT,
+            game.rng.next_f64() * SCREEN_TOP,
         );
         let sprite = game.rng.next_range(1, DEBRIS_SPRITES) as usize;
         let debris = Debris::new(&mut game.rng);
@@ -35,8 +33,8 @@ pub fn update(game: &mut Game, _id: ActorId) {
 
     if game.rng.next_f64() < FISH_CHANCE {
         let pos = v2(
-            game.rng.next_f64() * SCREEN_WIDTH,
-            game.rng.next_f64() * SCREEN_HEIGHT,
+            game.rng.next_f64() * SCREEN_RIGHT,
+            game.rng.next_f64() * SCREEN_TOP,
         );
         let sprite = game.rng.next_range(1, FISH_SPRITES) as usize;
         let fish = Fish::new(&mut game.rng);
@@ -76,8 +74,8 @@ mod tests {
         for &id in game.world.tagged("debris") {
             let actor = game.world.get(id);
             let pos = actor.transform.unwrap().pos;
-            assert!((0.0..SCREEN_WIDTH).contains(&pos.x));
-            assert!((0.0..SCREEN_HEIGHT).contains(&pos.y));
+            assert!((0.0..SCREEN_RIGHT).contains(&pos.x));
+            assert!((0.0..SCREEN_TOP).contains(&pos.y));
             assert_eq!(actor.sprite.as_ref().unwrap().color.unwrap().a, 0.0);
         }
     }

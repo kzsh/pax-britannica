@@ -101,6 +101,18 @@ cargo run --release --bin headless -- 12000 # the game with no window, and a sum
 cargo test
 ```
 
+It also builds for the browser:
+
+```bash
+rustup target add wasm32-unknown-unknown
+just serve                                  # build into web/dist and serve it
+```
+
+`just wasm` builds `web/dist` without serving it: the `.wasm`, miniquad's JS
+glue, `web/index.html` and symlinks to `sprites/` and `audio/`, which the game
+fetches by the same relative paths it reads on a desktop. Click the canvas
+before playing, both to give it keyboard focus and to let the music start.
+
 ## Credits
 
 Game design and programming by Henk Boom, Renaud Bédard and Matthew Gallant.

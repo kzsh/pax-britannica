@@ -2,8 +2,9 @@
 //!
 //! The Lua's `init` runs at the top of the scene's first update and creates
 //! actors in a fixed order: one per engine component that wants a callback, then
-//! the background, the background effects, the scene machine, and the particle
-//! emitters. **That order is the frame's update and draw order**, so it is
+//! the background effects, the scene machine, and the particle emitters. The
+//! Lua's `background` actor has no counterpart here: the sea is a gradient the
+//! renderer draws, not a sprite an actor wears. **That order is the frame's update and draw order**, so it is
 //! reproduced literally here even for components whose actors do nothing outside
 //! a window.
 //!
@@ -45,7 +46,6 @@ pub fn make(rng: LuaRng) -> Game {
     generic(&mut game, "fast_forward");
     game.world.spawn(blueprints::the_one_button());
 
-    game.world.spawn(blueprints::background());
     game.world.spawn(blueprints::background_fx());
     game.world.spawn(blueprints::game_flow());
     game.world.spawn(blueprints::particle_emitters());
@@ -115,7 +115,9 @@ mod tests {
 
     #[test]
     fn the_scene_is_built_in_the_order_the_interpreter_builds_it() {
-        // from `lua5.4` with the harness recording every game.actors.new call
+        // from `lua5.4` with the harness recording every game.actors.new call,
+        // less the `background` actor: its sprite is gone, and the sea is drawn
+        // as a gradient by the renderer instead
         let game = make(LuaRng::new(1, 0));
         assert_eq!(
             blueprints_in_order(&game),
@@ -128,7 +130,6 @@ mod tests {
                 "log",
                 "fast_forward",
                 "the_one_button",
-                "background",
                 "background_fx",
                 "game_flow",
                 "particles",

@@ -32,7 +32,7 @@
 //! transition is in flight is a distinct state from all three of the named ones.
 
 use crate::blueprints;
-use crate::constants::{SCREEN_BOTTOM, SCREEN_LEFT, SCREEN_RIGHT, SCREEN_TOP};
+use crate::constants::{CENTER, PLAY_SCALE};
 use crate::game::Game;
 use crate::scripts::countdown::CountdownCallback;
 use crate::scripts::fade::FadeCallback;
@@ -42,17 +42,16 @@ use crate::world::ActorId;
 
 use std::f64::consts::PI;
 
-/// The middle of the play area, which the factory ring is centred on.
-const CENTER: V2 = v2(
-    (SCREEN_LEFT + SCREEN_RIGHT) / 2.0,
-    (SCREEN_TOP + SCREEN_BOTTOM) / 2.0,
-);
-/// How far out from [`CENTER`] the factories start.
-const RADIUS: f64 = 300.0;
+/// How far out from [`CENTER`] the factories start. A field distance, so it
+/// grows with the field.
+const RADIUS: f64 = 300.0 * PLAY_SCALE;
 
-/// Spacing of the four selectors across the middle of the menu screen.
+/// Spacing of the four selectors across the middle of the menu screen, and how
+/// far below it the countdown sits. Art distances: the menu is laid out around
+/// sprites that do not scale, so neither do these.
 const SELECTOR_SPACING: f64 = 130.0;
 const SELECTOR_OFFSET: V2 = v2(-75.0, 0.0);
+const COUNTDOWN_DROP: f64 = 200.0;
 
 /// Frames a match hangs on after it is down to one factory, before restarting.
 const GAME_OVER_FRAMES: i64 = 300;
@@ -153,17 +152,17 @@ pub fn update(game: &mut Game, id: ActorId) {
 fn init(game: &mut Game, id: ActorId) {
     let dist = SELECTOR_SPACING;
     let offsets = [
-        1024.0 / 2.0 - dist / 2.0 - dist,
-        1024.0 / 2.0 - dist / 2.0,
-        1024.0 / 2.0 + dist / 2.0,
-        1024.0 / 2.0 + dist + dist / 2.0,
+        -dist / 2.0 - dist,
+        -dist / 2.0,
+        dist / 2.0,
+        dist + dist / 2.0,
     ];
 
     let selectors: Vec<ActorId> = offsets
         .into_iter()
         .enumerate()
         .map(|(index, x)| {
-            let pos = SELECTOR_OFFSET + v2(x, 768.0 / 2.0);
+            let pos = CENTER + SELECTOR_OFFSET + v2(x, 0.0);
             game.world
                 .spawn(blueprints::selection_factory(index + 1, pos))
         })
@@ -200,7 +199,7 @@ fn player_select(game: &mut Game, id: ActorId) {
     }
 
     let countdown = game.world.spawn(blueprints::countdown(
-        v2(1024.0 / 2.0, 768.0 / 2.0 - 200.0),
+        CENTER - v2(0.0, COUNTDOWN_DROP),
         CountdownCallback::StartGame(id),
     ));
     for selector in selectors {
@@ -321,12 +320,6 @@ pub fn restart(game: &mut Game) {
 
 #[cfg(test)]
 mod tests {
-    // Expected floats are the lua5.4 binary's %.17g output copied verbatim; see
-    // the same note in src/rng.rs. Half of the factory facing components are
-    // FRAC_1_SQRT_2 to the last bit and half are an ulp off it, which is
-    // precisely what the placement test pins -- the constant is no substitute.
-    #![allow(clippy::excessive_precision, clippy::approx_constant)]
-
     use super::*;
     use crate::world::{Phase, run_phase};
 
@@ -369,8 +362,11 @@ mod tests {
     }
 
     #[test]
-    fn the_selectors_sit_where_the_interpreter_puts_them() {
-        // from `lua5.4 test/trace.lua 8 --dump 1:1`
+    fn the_selectors_sit_evenly_about_the_middle_of_the_menu() {
+        // from `lua5.4 test/trace.lua 8 --dump 1:1`, which put them at 242, 372,
+        // 502 and 632 on the original 1024-wide field, whose middle was 512. The
+        // menu does not scale with the field, so the offsets from the middle are
+        // what survive.
         let mut game = Game::new();
         let id = spawn_flow(&mut game);
         update(&mut game, id);
@@ -378,13 +374,16 @@ mod tests {
         let xs: Vec<f64> = flow_of(&game, id)
             .selectors
             .iter()
-            .map(|&s| game.world.get(s).transform.unwrap().pos.x)
+            .map(|&s| game.world.get(s).transform.unwrap().pos.x - CENTER.x)
             .collect();
-        assert_eq!(xs, [242.0, 372.0, 502.0, 632.0]);
+        assert_eq!(
+            xs,
+            [242.0 - 512.0, 372.0 - 512.0, 502.0 - 512.0, 632.0 - 512.0]
+        );
 
         for &s in &flow_of(&game, id).selectors {
             let transform = game.world.get(s).transform.unwrap();
-            assert_eq!(transform.pos.y, 384.0);
+            assert_eq!(transform.pos.y, CENTER.y);
             assert_eq!(transform.facing, V2::J);
         }
     }
@@ -476,57 +475,45 @@ mod tests {
     }
 
     #[test]
-    fn four_factories_land_exactly_where_the_interpreter_puts_them() {
-        // positions from `lua5.4 test/trace.lua 366 --dump 364:364`, the frame
-        // the match starts in the traced run; facings from evaluating the same
-        // expression in the interpreter, because by the time the trace sees them
-        // the factories' own update has already nudged them a fraction of a
-        // degree towards their first target
+    fn four_factories_land_on_the_ring_facing_along_it() {
+        // the Lua put them on the diagonals of a 300-unit ring around the middle
+        // of the field, each facing along the circle; the ring is a field
+        // distance, so it is RADIUS -- 300 scaled -- that they sit on here
         let mut game = Game::new();
         let id = spawn_flow(&mut game);
         update(&mut game, id);
 
         begin_match(&mut game, id, &[1, 2, 3, 4]);
 
-        let placements: Vec<(f64, f64, f64, f64)> = game
+        let placements: Vec<(V2, V2)> = game
             .world
             .tagged("factory")
             .iter()
             .map(|&f| {
                 let t = game.world.get(f).transform.unwrap();
-                (t.pos.x, t.pos.y, t.facing.x, t.facing.y)
+                (t.pos, t.facing)
             })
             .collect();
 
-        assert_eq!(
-            placements,
-            [
-                (
-                    299.86796564403573,
-                    596.13203435596427,
-                    -0.70710678118654757,
-                    -0.70710678118654757
-                ),
-                (
-                    724.13203435596427,
-                    596.13203435596427,
-                    -0.70710678118654757,
-                    0.70710678118654757
-                ),
-                (
-                    299.86796564403573,
-                    171.86796564403576,
-                    0.70710678118654746,
-                    -0.70710678118654757
-                ),
-                (
-                    724.13203435596415,
-                    171.86796564403571,
-                    0.70710678118654779,
-                    0.70710678118654735
-                ),
-            ]
-        );
+        let quarter = PI / 4.0;
+        let angles = [3.0 * quarter, quarter, 5.0 * quarter, 7.0 * quarter];
+
+        for (&(pos, facing), angle) in placements.iter().zip(angles) {
+            let spoke = pos - CENTER;
+            assert!(
+                (spoke.mag() - RADIUS).abs() < 1e-9,
+                "{pos:?} is {} from the middle, not {RADIUS}",
+                spoke.mag()
+            );
+            assert!(
+                (spoke.norm() - V2::unit(angle)).mag() < 1e-9,
+                "{pos:?} is not at {angle} radians"
+            );
+            assert!(
+                spoke.norm().dot(facing).abs() < 1e-9,
+                "{facing:?} is not tangent to the ring at {pos:?}"
+            );
+        }
     }
 
     #[test]

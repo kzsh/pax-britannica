@@ -6,6 +6,24 @@ default: check
 run:
     cargo run --release --bin pax
 
+# Build the browser version into web/dist
+wasm:
+    cargo build --release --target wasm32-unknown-unknown --bin pax
+    mkdir -p web/dist
+    cp target/wasm32-unknown-unknown/release/pax.wasm web/dist/pax.wasm
+    cp web/index.html web/dist/
+    # miniquad's JS glue, which the wasm imports; upstream ships no crates.io copy
+    [[ -f web/dist/mq_js_bundle.js ]] || \
+        curl -sSfL -o web/dist/mq_js_bundle.js \
+            https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js
+    # load_texture and load_sound fetch these paths relative to the page
+    ln -sfn ../../sprites web/dist/sprites
+    ln -sfn ../../audio web/dist/audio
+
+# Serve the browser version at http://localhost:8000
+serve port='8000': wasm
+    python3 -m http.server {{port}} --directory web/dist
+
 # Run the Rust game with no window and print a summary
 smoke frames='12000':
     cargo run --release --bin headless -- {{frames}}

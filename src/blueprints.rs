@@ -8,6 +8,7 @@
 //! actor, so it is preserved exactly as `blueprints.lua` lists it.
 
 use crate::collision::Polygon;
+use crate::constants::PLAY_SCALE;
 use crate::resources::SpriteId;
 use crate::rng::LuaRng;
 use crate::scripts::ScriptKind;
@@ -191,6 +192,14 @@ pub fn frigate(player: usize, pos: V2, facing: V2) -> Actor {
     }
 }
 
+/// A factory's constant left turn, from `blueprints.lua`.
+///
+/// The circle it wanders is its terminal speed over this rate, so dividing by
+/// the field scale makes that circle grow with the field instead of leaving the
+/// factories crowded into the middle of a bigger sea.
+const FACTORY_TURN_SPEED: f64 = 0.00028 / PLAY_SCALE;
+const FACTORY_ACCEL: f64 = 0.002;
+
 /// The shared half of the two factory blueprints: everything down to the
 /// production dial. They differ only in who works the button.
 fn factory(player: usize, pos: V2, facing: V2) -> Actor {
@@ -213,8 +222,8 @@ fn factory(player: usize, pos: V2, facing: V2) -> Actor {
             damage: 0.0,
         }),
         ship: Some(Ship::new(
-            0.00028,
-            0.002,
+            FACTORY_TURN_SPEED,
+            FACTORY_ACCEL,
             20000.0,
             Some(ShipSprites::Factory),
         )),
@@ -250,16 +259,6 @@ pub fn easy_enemy_factory(rng: &mut LuaRng, player: usize, pos: V2, facing: V2) 
     actor.easy_enemy_production = Some(EasyEnemyProduction::new(rng, resources));
 
     actor
-}
-
-/// `blueprints.background`: the sea floor, drawn behind everything.
-pub fn background() -> Actor {
-    Actor {
-        scripts: vec![ScriptKind::Transform, ScriptKind::Sprite],
-        transform: Some(Transform::default()),
-        sprite: Some(Sprite::new(SpriteId::Background)),
-        ..Actor::new("background")
-    }
 }
 
 /// `blueprints.background_fx`: the spawner that drops debris and fish.
@@ -482,7 +481,6 @@ mod tests {
             frigate(1, V2::ZERO, V2::I),
             player_factory(1, V2::ZERO, V2::I),
             easy_enemy_factory(&mut rng, 2, V2::ZERO, V2::I),
-            background(),
             selection_factory(1, V2::ZERO),
         ];
 

@@ -10,7 +10,6 @@ pub type Player = usize;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SpriteId {
-    Background,
     Loading,
     Title,
     Credits,
@@ -117,11 +116,6 @@ impl SpriteId {
     /// image.
     pub fn meta(self) -> SpriteMeta {
         match self {
-            SpriteId::Background => SpriteMeta {
-                path: "sprites/background.png",
-                origin: Origin::At(0.0, 0.0),
-                smooth: false,
-            },
             SpriteId::Loading => SpriteMeta {
                 path: "sprites/loading.png",
                 origin: Origin::At(113.0, -10.0),
@@ -192,7 +186,6 @@ impl SpriteId {
 /// Every image the game can ask for, so the renderer can load them all up front.
 pub fn all() -> Vec<SpriteId> {
     let mut ids = vec![
-        SpriteId::Background,
         SpriteId::Loading,
         SpriteId::Title,
         SpriteId::Credits,

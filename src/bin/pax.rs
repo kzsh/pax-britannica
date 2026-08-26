@@ -12,9 +12,7 @@
 //! in `components/the_one_button.lua`. That component also polls four joysticks;
 //! macroquad has no gamepad API, so pads are not wired up.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use macroquad::audio::{PlaySoundParams, load_sound, play_sound};
+use macroquad::audio::{PlaySoundParams, Sound, load_sound, play_sound};
 use macroquad::prelude::*;
 
 use pax_britannica::game::Game;
@@ -42,24 +40,32 @@ fn window_conf() -> Conf {
 }
 
 /// `math.randomseed()` with no argument: a fresh stream every run.
+///
+/// miniquad's clock rather than `SystemTime`, which has no implementation on
+/// `wasm32-unknown-unknown` and panics there. `date::now` is seconds since the
+/// epoch as a float; nanoseconds give the low bits something to vary.
 fn seed() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|since| since.as_nanos() as i64)
-        .unwrap_or(1)
+    (macroquad::miniquad::date::now() * 1e9) as i64
 }
 
-async fn start_music() {
+async fn load_music() -> Option<Sound> {
     match load_sound("audio/music.ogg").await {
-        Ok(music) => play_sound(
-            &music,
-            PlaySoundParams {
-                looped: true,
-                volume: 1.0,
-            },
-        ),
-        Err(error) => macroquad::logging::warn!("could not load audio/music.ogg: {error}"),
+        Ok(music) => Some(music),
+        Err(error) => {
+            macroquad::logging::warn!("could not load audio/music.ogg: {error}");
+            None
+        }
     }
+}
+
+fn start_music(music: &Sound) {
+    play_sound(
+        music,
+        PlaySoundParams {
+            looped: true,
+            volume: 1.0,
+        },
+    );
 }
 
 #[macroquad::main(window_conf)]
@@ -72,8 +78,24 @@ async fn main() {
         }
     };
 
-    if !std::env::args().any(|arg| arg == "--no-music") {
-        start_music().await;
+    // std::env::args is empty on wasm, so the browser build always has music.
+    // The Sound is held for the whole run: dropping it deletes it from the
+    // mixer, which would cut the loop off mid-playback.
+    let music = if std::env::args().any(|arg| arg == "--no-music") {
+        None
+    } else {
+        load_music().await
+    };
+
+    // A browser refuses to start audio before the page has been interacted
+    // with, so there the soundtrack waits for the first button press. On a
+    // desktop it plays over the title screen, as the original does.
+    let mut playing = false;
+    if !cfg!(target_arch = "wasm32")
+        && let Some(music) = &music
+    {
+        start_music(music);
+        playing = true;
     }
 
     let mut game = the_game::make(LuaRng::new(seed(), 0));
@@ -86,6 +108,14 @@ async fn main() {
         }
 
         read_input(&mut game);
+
+        if !playing
+            && game.the_one_button.keys.iter().any(|held| *held)
+            && let Some(music) = &music
+        {
+            start_music(music);
+            playing = true;
+        }
 
         behind += get_frame_time() as f64;
         let mut ticks = 0;

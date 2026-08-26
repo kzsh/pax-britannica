@@ -10,8 +10,10 @@
 //! flicker) already ran inside [`the_game::step`](crate::the_game::step); what
 //! is left here is pixels. That split is why the game can be run headless.
 //!
-//! The world is a fixed 1024x768 in game units, letterboxed to 4:3 inside
-//! whatever the window happens to be.
+//! The world is a fixed 4:3 field in game units --
+//! [`SCREEN_RIGHT`] by [`SCREEN_TOP`], sized by
+//! [`PLAY_SCALE`](crate::constants::PLAY_SCALE) -- letterboxed inside whatever
+//! the window happens to be.
 
 use std::collections::HashMap;
 
@@ -22,6 +24,7 @@ use crate::game::Game;
 use crate::resources::{self, Origin, SpriteId};
 use crate::scripts::ScriptKind;
 use crate::scripts::production::{self, UnitType};
+use crate::scripts::splash;
 use crate::scripts::sprite::Color as GameColor;
 use crate::v2::V2;
 
@@ -32,6 +35,21 @@ const SELECTOR_SEGMENTS: usize = 16;
 
 /// Radius of the dial's slices, shared by both.
 const DIAL_RADIUS: f32 = 32.0;
+
+/// The sea, as `sprites/background.png` had it: one hue, darkest dead centre and
+/// brightest in the corners, sampled from the middle and the corner pixels of
+/// that image.
+const SEA_CENTER: [f32; 3] = [12.0 / 255.0, 18.0 / 255.0, 19.0 / 255.0];
+const SEA_EDGE: [f32; 3] = [33.0 / 255.0, 49.0 / 255.0, 52.0 / 255.0];
+
+/// Cells across and down the gradient mesh. The colour is linear in the distance
+/// from the centre, so the vertex interpolation only has to keep up with the
+/// curvature of the rings; a coarse grid is plenty.
+/// Vertex count is `(SEA_COLUMNS + 1) * (SEA_ROWS + 1)` and index count
+/// `SEA_COLUMNS * SEA_ROWS * 6`, both of which have to stay under macroquad's
+/// per-call limits of 10000 and 5000 (`quad_gl::QuadGl::geometry`).
+const SEA_COLUMNS: usize = 24;
+const SEA_ROWS: usize = 18;
 
 /// How far behind the ship the dial sits, along its facing.
 const PRODUCTION_DRAW_OFFSET: f64 = -4.0;
@@ -83,7 +101,8 @@ fn letterbox(aspect: f32) -> Vec2 {
     }
 }
 
-/// A camera matching `glOrtho(0, 1024, 0, 768)`: origin bottom left, y upwards.
+/// A camera matching `glOrtho(0, width, 0, height)`: origin bottom left, y
+/// upwards.
 ///
 /// `zoom.y` is negative because `Camera2D::matrix` negates it again whenever the
 /// camera draws to the screen rather than to a render target (macroquad 0.4.16,
@@ -175,9 +194,69 @@ fn pie(segments: usize, radius: f32, color: Color, angle_at: impl Fn(f32) -> f32
     }
 }
 
+/// The sea's colour at a point on a `width` by `height` surface: [`SEA_CENTER`]
+/// at its centre, [`SEA_EDGE`] at its corners, linear in between.
+fn sea_color(x: f32, y: f32, width: f32, height: f32) -> Color {
+    let (half_w, half_h) = (width / 2.0, height / 2.0);
+    let (dx, dy) = (x - half_w, y - half_h);
+    let distance = (dx * dx + dy * dy).sqrt();
+    let corner = (half_w * half_w + half_h * half_h).sqrt();
+    let t = if corner > 0.0 {
+        (distance / corner).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    let channel = |i: usize| SEA_CENTER[i] + (SEA_EDGE[i] - SEA_CENTER[i]) * t;
+    Color::new(channel(0), channel(1), channel(2), 1.0)
+}
+
+/// The sea, as a vertex-coloured grid over the whole window.
+///
+/// Drawn in screen space rather than world space, before the camera is set, so
+/// it covers the letterbox bars too. The camera keeps the field centred in the
+/// window, so the darkest point of the vignette still sits at the middle of the
+/// playing field; a mesh rather than a texture so it stays smooth at any size.
+fn draw_sea(width: f32, height: f32) {
+    let mut vertices = Vec::with_capacity((SEA_COLUMNS + 1) * (SEA_ROWS + 1));
+
+    for row in 0..=SEA_ROWS {
+        for column in 0..=SEA_COLUMNS {
+            let x = width * column as f32 / SEA_COLUMNS as f32;
+            let y = height * row as f32 / SEA_ROWS as f32;
+            let color = sea_color(x, y, width, height);
+            vertices.push(Vertex::new(x, y, 0.0, 0.0, 0.0, color));
+        }
+    }
+
+    let stride = (SEA_COLUMNS + 1) as u16;
+    let mut indices = Vec::with_capacity(SEA_COLUMNS * SEA_ROWS * 6);
+    for row in 0..SEA_ROWS as u16 {
+        for column in 0..SEA_COLUMNS as u16 {
+            let corner = row * stride + column;
+            indices.extend_from_slice(&[
+                corner,
+                corner + 1,
+                corner + stride,
+                corner + 1,
+                corner + stride + 1,
+                corner + stride,
+            ]);
+        }
+    }
+
+    draw_mesh(&Mesh {
+        vertices,
+        indices,
+        texture: None,
+    });
+}
+
 /// One frame, in the order `the_game.lua`'s draw phases run it.
 pub fn frame(game: &Game, assets: &Assets) {
+    set_default_camera();
     clear_background(BLACK);
+    draw_sea(screen_width(), screen_height());
     set_camera(&camera());
 
     for &id in game.world.order() {
@@ -203,19 +282,20 @@ pub fn frame(game: &Game, assets: &Assets) {
     draw_particles(game, assets, false);
     draw_particles(game, assets, true);
 
+    // in screen space, like the sea: a fade to black that left the letterbox
+    // bars lit would not be a fade to black
+    set_default_camera();
     for &id in game.world.tagged("fade") {
         if let Some(fade) = game.world.get(id).fade.as_ref() {
             draw_rectangle(
                 0.0,
                 0.0,
-                SCREEN_RIGHT as f32,
-                SCREEN_TOP as f32,
+                screen_width(),
+                screen_height(),
                 Color::new(0.0, 0.0, 0.0, fade.opacity() as f32),
             );
         }
     }
-
-    set_default_camera();
 }
 
 /// `dokidoki/scripts/sprite.lua`.
@@ -437,26 +517,21 @@ fn draw_selector(game: &Game, assets: &Assets, id: crate::world::ActorId) {
     pop_matrix();
 }
 
-/// `scripts/splash.lua`: the title and the credits, at fixed points.
+/// `scripts/splash.lua`: the title and the credits, at the points that script
+/// names.
 fn draw_splash(assets: &Assets) {
-    let width = SCREEN_RIGHT as f32;
-    let height = SCREEN_TOP as f32;
-
-    push_matrix(Mat4::from_translation(vec3(
-        width / 2.0,
-        height / 2.0 + height / 4.0,
-        0.0,
-    )));
-    draw_sprite(assets, SpriteId::Title, WHITE);
-    pop_matrix();
-
-    push_matrix(Mat4::from_translation(vec3(
-        width / 2.0 + 265.0,
-        height / 2.0,
-        0.0,
-    )));
-    draw_sprite(assets, SpriteId::Credits, WHITE);
-    pop_matrix();
+    for (pos, image) in [
+        (splash::TITLE_POS, SpriteId::Title),
+        (splash::CREDITS_POS, SpriteId::Credits),
+    ] {
+        push_matrix(Mat4::from_translation(vec3(
+            pos.x as f32,
+            pos.y as f32,
+            0.0,
+        )));
+        draw_sprite(assets, image, WHITE);
+        pop_matrix();
+    }
 }
 
 /// `particles.c`'s draw: one quad per live particle, fading out with its life.
@@ -504,6 +579,48 @@ fn draw_particles(game: &Game, assets: &Assets, foreground: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_sea_is_darkest_in_the_middle_and_brightest_in_the_corners() {
+        // whatever the window is: the gradient is fitted to the surface it is
+        // drawn on, not to the 4:3 field
+        for (width, height) in [(1024.0, 768.0), (1920.0, 1080.0), (600.0, 900.0)] {
+            let middle = sea_color(width / 2.0, height / 2.0, width, height);
+            assert_eq!(
+                [middle.r, middle.g, middle.b],
+                SEA_CENTER,
+                "{width}x{height}: the centre is not the darkest colour"
+            );
+
+            for (x, y) in [(0.0, 0.0), (width, 0.0), (0.0, height), (width, height)] {
+                let corner = sea_color(x, y, width, height);
+                for (got, want) in [corner.r, corner.g, corner.b].into_iter().zip(SEA_EDGE) {
+                    assert!(
+                        (got - want).abs() < 1e-6,
+                        "{width}x{height} corner ({x}, {y}): {got} not {want}"
+                    );
+                }
+            }
+
+            // and monotonic along the way out
+            let mut previous = 0.0;
+            for step in 0..=16 {
+                let x = width / 2.0 * (1.0 + step as f32 / 16.0);
+                let level = sea_color(x, height / 2.0, width, height).g;
+                assert!(
+                    level >= previous,
+                    "{width}x{height}: x {x} is darker than the point inside it"
+                );
+                previous = level;
+            }
+        }
+    }
+
+    #[test]
+    fn a_degenerate_window_does_not_divide_by_zero() {
+        let color = sea_color(0.0, 0.0, 0.0, 0.0);
+        assert_eq!([color.r, color.g, color.b], SEA_CENTER);
+    }
 
     #[test]
     fn a_four_by_three_window_needs_no_letterbox() {
