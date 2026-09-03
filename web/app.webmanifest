@@ -1,0 +1,17 @@
+{
+  "name": "Pax Britannica",
+  "short_name": "Pax",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0c1213",
+  "theme_color": "#0c1213",
+  "icons": [
+    {
+      "src": "favicon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

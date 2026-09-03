@@ -18,7 +18,7 @@ js-bundle:
 wasm: js-bundle
     cargo build --release --target wasm32-unknown-unknown --bin pax
     cp target/wasm32-unknown-unknown/release/pax.wasm web/dist/pax.wasm
-    cp web/index.html web/favicon.png web/dist/
+    cp web/index.html web/favicon.png web/app.webmanifest web/dist/
     # load_texture and load_sound fetch these paths relative to the page
     ln -sfn ../../sprites web/dist/sprites
     ln -sfn ../../audio web/dist/audio

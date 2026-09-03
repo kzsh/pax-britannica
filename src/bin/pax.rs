@@ -11,7 +11,7 @@
 //! Input is the four keyboard buttons `A`, `F`, `H` and `L`, one per player, as
 //! in `components/the_one_button.lua`. That component also polls four joysticks;
 //! macroquad has no gamepad API, so pads are not wired up. Touches are folded
-//! in on top, two players to a screen; see [`pax_britannica::touch`].
+//! in on top, up to four players to a screen; see [`pax_britannica::touch`].
 
 use macroquad::audio::{PlaySoundParams, Sound, load_sound, play_sound};
 use macroquad::prelude::*;
@@ -157,27 +157,30 @@ fn read_input(game: &mut Game) {
     game.the_one_button.keys = keys;
 }
 
-/// Everything currently pressed against the glass, as a fraction of the window
-/// width.
+/// Everything currently pressed against the glass, as fractions of the window's
+/// width and height.
 ///
 /// The mouse counts as one more pointer so that the touch scheme can be driven
 /// from a desktop browser. On a phone it is a duplicate -- miniquad synthesises
-/// mouse events from the first touch -- but a duplicate on the same half of the
-/// screen changes nothing.
-fn pointers() -> Vec<f64> {
+/// mouse events from the first touch -- but a duplicate in the same quadrant
+/// changes nothing.
+fn pointers() -> Vec<touch::Pointer> {
     let width = screen_width().max(1.0) as f64;
+    let height = screen_height().max(1.0) as f64;
+    let at = |x: f32, y: f32| (x as f64 / width, y as f64 / height);
 
-    let mut xs: Vec<f64> = touches()
+    let mut down: Vec<touch::Pointer> = touches()
         .iter()
         .filter(|touch| !matches!(touch.phase, TouchPhase::Ended | TouchPhase::Cancelled))
-        .map(|touch| touch.position.x as f64 / width)
+        .map(|touch| at(touch.position.x, touch.position.y))
         .collect();
 
     if is_mouse_button_down(MouseButton::Left) {
-        xs.push(mouse_position().0 as f64 / width);
+        let (x, y) = mouse_position();
+        down.push(at(x, y));
     }
 
-    xs
+    down
 }
 
 /// The human-controlled factories still in the match, in player order. Empty on
@@ -192,7 +195,7 @@ fn humans(game: &Game) -> Vec<usize> {
         .collect();
 
     // spawn order follows the roster, which start_positions leaves ascending,
-    // but the halves depend on it so it is not left to chance
+    // but the quadrants depend on it so it is not left to chance
     players.sort_unstable();
     players
 }
