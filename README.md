@@ -1,40 +1,32 @@
 # Pax Britannica
 
-One-button real-time strategy. The original was made in 2010 for GAMMA4, a
-one-button game competition.
+One-button real-time strategy. The game was made by Henk Boom, Renaud Bédard
+and Matthew Gallant, with artwork by Daniel Burton and  music by Ben Abraham 
+in 2010 for GAMMA4, a one-button game competition. 
+
+I supervised and tested an LLM port to rust and wasm. Everything awesome about this
+game is due to the work of the previously mentioned authors and artists.
 
 This is a vibe-coded port of Pax Britannica to Rust and macroquad, made with an
-LLM coding agent. It has not been reviewed line by line by a human. The original
-codebase, Lua on a hand-rolled engine, is at
-[henkboom/pax-britannica](https://github.com/henkboom/pax-britannica); the port
-was driven against it frame by frame, as [PORTING.md](PORTING.md) describes.
+LLM coding agent. The original codebase, Lua on a hand-rolled engine, is at
+[henkboom/pax-britannica](https://github.com/henkboom/pax-britannica)..
 
 ## Setup
 
 The game can be played with one player versus the computer, or up to four
 players head-to-head. Press `A` on the title screen to join the game. Other
 players can join as long as the 5-second countdown doesn't run out. The `a`,
-`f`, `h` and `l` keys are mapped to players 1-4. Alternately, you can play with
-Xbox controllers.
+`f`, `h` and `l` keys are mapped to players 1-4.
 
-On a touchscreen the screen is split down the middle: tapping the left half
-joins player 1, the right half player 2, and each thumb then holds the half it
-joined with. One player alone gets a CPU opponent, and the whole screen becomes
-theirs.
-
-`F11` toggles fullscreen on the desktop. In the browser, use the button in the
-corner: it takes the whole page fullscreen and asks for landscape, and tapping
-it again is the way back out on a phone.
-
+On a touchscreen the screen is split down the middle: tapping the upper-left, 
+lower-left, upper-right or lower-right quadrants will join as a separate player
+up to 4. If only one player joins, they play against a  CPU opponent.
 ## Controls
 
-The game is controlled entirely with one button, the `A` button on the Xbox 360
-controller.
-
-Holding down the button spins the needle on the radial menu in the middle of the
-player's factory ship. The needle will only travel as far as the player's
-current resources allow. Resources (gold? seaweed? who knows!) accumulate over
-time.
+The game is controlled entirely with one button. Holding down the button spins 
+the needle on the radial menu in the middle of the player's factory ship. 
+The needle will only travel as far as the player's current resources allow. 
+Resources (gold? seaweed? who knows!) accumulate over time.
 
 Releasing the button creates a ship that corresponds to the quadrant that the
 needle is pointing at.
